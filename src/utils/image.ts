@@ -6,6 +6,9 @@ import os from 'os';
 const MAX_DIMENSION = 1024;
 
 export async function resizeImage(inputPath: string): Promise<string> {
+  if (inputPath.includes('..') || inputPath.startsWith('/')) {
+    throw new Error('Invalid input path');
+  }
   const resolved = path.resolve(inputPath);
   if (!fs.existsSync(resolved)) {
     throw new Error(`Image not found: ${resolved}`);
@@ -22,6 +25,9 @@ export async function resizeImage(inputPath: string): Promise<string> {
 }
 
 export function imageToBase64(filePath: string): string {
+  if (filePath.includes('..')) {
+    throw new Error('Invalid file path');
+  }
   const buffer = fs.readFileSync(filePath);
   return buffer.toString('base64');
 }
