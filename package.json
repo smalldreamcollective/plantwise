@@ -1,0 +1,37 @@
+{
+  "name": "plantwise",
+  "version": "0.1.0",
+  "description": "AI-powered houseplant care assistant",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "plantwise": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",
+    "dev": "tsx src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "add": "tsx src/cli/index.ts add",
+    "status": "tsx src/cli/index.ts status",
+    "identify": "tsx src/cli/index.ts identify",
+    "diagnose": "tsx src/cli/index.ts diagnose",
+    "help": "tsx src/cli/index.ts help-guide"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@langchain/anthropic": "^0.3.14",
+    "@langchain/langgraph": "^0.2.62",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^11.7.0",
+    "commander": "^13.0.0",
+    "dotenv": "^16.4.7",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.7",
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
