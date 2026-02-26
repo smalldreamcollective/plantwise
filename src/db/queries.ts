@@ -19,9 +19,7 @@ export interface HealthCheck {
 
 export function insertPlant(name: string, species?: string, notes?: string): Plant {
   const db = getDb();
-  const stmt = db.prepare(
-    'INSERT INTO plants (name, species, notes) VALUES (?, ?, ?) RETURNING *'
-  );
+  const stmt = db.prepare('INSERT INTO plants (name, species, notes) VALUES (?, ?, ?) RETURNING *');
   return stmt.get(name, species ?? null, notes ?? null) as Plant;
 }
 

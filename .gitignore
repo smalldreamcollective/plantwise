@@ -4,3 +4,7 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+# SQLite :memory: test artifacts
+:memory:
+:memory:-shm
+:memory:-wal

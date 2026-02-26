@@ -1,6 +1,12 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { insertPlant, listPlants, getPlant, getHealthChecksForPlant, insertHealthCheck } from '../db/queries';
+import {
+  insertPlant,
+  listPlants,
+  getPlant,
+  getHealthChecksForPlant,
+  insertHealthCheck,
+} from '../db/queries';
 import { identifyPlant, assessPlantHealth } from '../services/plantid';
 import { resizeImage } from '../utils/image';
 
@@ -87,7 +93,10 @@ export const assessHealthTool = tool(
     description: 'Assess the health of a plant from a photo using the Plant.id API',
     schema: z.object({
       photo_path: z.string().describe('Path to the plant photo'),
-      plant_id: z.number().optional().describe('Optional plant ID to associate with this health check'),
+      plant_id: z
+        .number()
+        .optional()
+        .describe('Optional plant ID to associate with this health check'),
     }),
   }
 );

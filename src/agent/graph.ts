@@ -41,7 +41,11 @@ async function agentNode(state: GraphStateType): Promise<Partial<GraphStateType>
   return { messages: [response] };
 }
 
-function buildSystemPrompt(command: string, photoPath: string | null, plantId: number | null): string {
+function buildSystemPrompt(
+  command: string,
+  photoPath: string | null,
+  plantId: number | null
+): string {
   const parts = [
     'You are PlantWise, an expert houseplant care assistant.',
     `The user is running the "${command}" command.`,
@@ -56,7 +60,7 @@ function buildSystemPrompt(command: string, photoPath: string | null, plantId: n
     'Always present results in a friendly, helpful tone.',
     'For identification: summarize the top plant matches with probabilities.',
     'For diagnosis: clearly explain health issues and actionable care advice.',
-    'For status: summarize the plant\'s care history and current health.',
+    "For status: summarize the plant's care history and current health."
   );
 
   return parts.join('\n');

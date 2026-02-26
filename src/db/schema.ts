@@ -4,13 +4,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const DB_PATH = process.env.DB_PATH || './plantwise.db';
-
 let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!_db) {
-    _db = new Database(path.resolve(DB_PATH));
+    const dbPath = process.env['DB_PATH'] ?? './plantwise.db';
+    _db = new Database(path.resolve(dbPath));
     _db.pragma('journal_mode = WAL');
     _db.pragma('foreign_keys = ON');
     initSchema(_db);
