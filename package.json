@@ -15,7 +15,18 @@
     "status": "tsx src/cli/index.ts status",
     "identify": "tsx src/cli/index.ts identify",
     "diagnose": "tsx src/cli/index.ts diagnose",
-    "help": "tsx src/cli/index.ts help-guide"
+    "help": "tsx src/cli/index.ts help-guide",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": ["eslint --fix", "prettier --write"]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
@@ -28,10 +39,19 @@
     "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.7",
+    "@vitest/coverage-v8": "^3.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "tsup": "^8.5.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
   }
 }

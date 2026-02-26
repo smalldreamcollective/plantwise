@@ -8,10 +8,7 @@ dotenv.config();
 
 const program = new Command();
 
-program
-  .name('plantwise')
-  .description('AI-powered houseplant care assistant')
-  .version('0.1.0');
+program.name('plantwise').description('AI-powered houseplant care assistant').version('0.1.0');
 
 program
   .command('add <name>')
@@ -21,7 +18,9 @@ program
   .action((name: string, options: { species?: string; notes?: string }) => {
     try {
       const plant = insertPlant(name, options.species, options.notes);
-      console.log(`Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`);
+      console.log(
+        `Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`
+      );
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
@@ -75,7 +74,9 @@ program
       try {
         const plants = listPlants();
         if (plants.length === 0) {
-          console.log('No plants in your collection yet. Use "plantwise add <name>" to get started.');
+          console.log(
+            'No plants in your collection yet. Use "plantwise add <name>" to get started.'
+          );
           return;
         }
         console.log(`Your plants (${plants.length}):\n`);
