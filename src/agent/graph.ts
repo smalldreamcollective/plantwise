@@ -1,6 +1,6 @@
 import { StateGraph, END, START, Annotation } from '@langchain/langgraph';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { HumanMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, BaseMessage, SystemMessage } from '@langchain/core/messages';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import dotenv from 'dotenv';
 import { allTools } from './tools';
@@ -73,7 +73,7 @@ export function buildInitialMessages(
   userMessage: string
 ): BaseMessage[] {
   const system = buildSystemPrompt(command, photoPath, plantId);
-  return [new HumanMessage(`${system}\n\n${userMessage}`)];
+  return [new SystemMessage(system), new HumanMessage(userMessage)];
 }
 
 export async function runAgent(
