@@ -5,8 +5,8 @@ AI-powered houseplant care assistant. Identify plants, diagnose health issues, a
 ## Requirements
 
 - Node.js 20+
-- An [Anthropic API key](https://console.anthropic.com)
-- A [Plant.id API key](https://web.plant.id)
+- An [Anthropic API key](https://console.anthropic.com) *(required for `identify` and `diagnose` only)*
+- A [Plant.id API key](https://web.plant.id) *(required for `identify` and `diagnose` only)*
 
 ## Installation
 
@@ -40,12 +40,19 @@ npm run help
 
 # Detailed help for a specific command
 npm run help -- add
+npm run help -- water
+npm run help -- remind
+npm run help -- remove
 npm run help -- status
 npm run help -- identify
 npm run help -- diagnose
 ```
 
-### `add` — Add a plant to your collection
+---
+
+Commands marked **direct** work without API keys. Commands marked **AI** require Anthropic + Plant.id keys.
+
+### `add` — Add a plant to your collection *(direct)*
 
 ```bash
 npm run add -- "Monstera"
@@ -53,40 +60,74 @@ npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
 npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
 ```
 
-### `status` — View your collection
+### `water` — Log that you watered a plant *(direct)*
+
+```bash
+npm run water -- 1
+```
+
+### `remind` — List plants overdue for watering *(direct)*
+
+```bash
+npm run remind
+```
+
+Shows every plant whose last watering exceeds its interval (default: 7 days), ordered by most overdue first. Plants that have never been watered are always listed.
+
+### `remove` — Remove a plant from your collection *(direct)*
+
+```bash
+npm run remove -- 1
+```
+
+Prompts for confirmation before deleting the plant and all its associated watering logs and health checks.
+
+### `status` — View your collection *(direct)*
 
 ```bash
 # List all plants
 npm run status
 
-# Show health history for a specific plant (requires API keys)
+# Show detailed status and health history for a specific plant
 npm run status -- --plant 1
 ```
 
-### `identify` — Identify a plant from a photo
+### `identify` — Identify a plant from a photo *(AI)*
 
 ```bash
 npm run identify -- ./photo.jpg
 ```
 
-Requires Anthropic + Plant.id API keys. The photo is resized to 1024px before submission.
+Requires API keys. The photo is resized to 1024px before submission.
 
-### `diagnose` — Assess plant health from a photo
+### `diagnose` — Assess plant health from a photo *(AI)*
 
 ```bash
 # Standalone diagnosis
 npm run diagnose -- ./photo.jpg
 
-# Associate with a plant in your collection
+# Associate the result with a plant in your collection
 npm run diagnose -- ./photo.jpg --plant 1
 ```
 
-Requires Anthropic + Plant.id API keys. Results are saved to the database automatically.
+Requires API keys. Results are saved to the database automatically.
 
 ## Development
 
 ```bash
-# Type-check only (slow due to LangGraph types — ~2min)
+# Run tests
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# Lint
+npm run lint
+
+# Format
+npm run format
+
+# Type-check (slow due to LangGraph types — ~2min)
 npm run typecheck
 
 # Build to dist/
@@ -97,6 +138,7 @@ npm run build
 
 Plant data is stored in a local SQLite database (`plantwise.db` by default). The location can be changed via `DB_PATH` in `.env`.
 
-Two tables:
-- **plants** — your collection (name, species, notes)
+Three tables:
+- **plants** — your collection (name, species, notes, watering interval)
 - **health_checks** — diagnosis history per plant, including raw Plant.id API responses
+- **watering_logs** — timestamped watering events per plant
