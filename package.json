@@ -13,6 +13,7 @@
     "start": "node dist/cli/index.js",
     "add": "tsx src/cli/index.ts add",
     "log": "tsx src/cli/index.ts log",
+    "sensor": "tsx src/cli/index.ts sensor",
     "remind": "tsx src/cli/index.ts remind",
     "remove": "tsx src/cli/index.ts remove",
     "status": "tsx src/cli/index.ts status",

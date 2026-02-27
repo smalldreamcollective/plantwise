@@ -44,6 +44,14 @@ function initSchema(db: Database.Database): void {
       notes TEXT,
       occurred_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS sensor_readings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+      moisture_pct INTEGER NOT NULL CHECK (moisture_pct BETWEEN 0 AND 100),
+      source TEXT NOT NULL DEFAULT 'manual',
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrate existing DBs: add watering_interval_days if not already present
@@ -51,6 +59,13 @@ function initSchema(db: Database.Database): void {
     db.exec('ALTER TABLE plants ADD COLUMN watering_interval_days INTEGER DEFAULT 7');
   } catch {
     // Column already exists — expected for any DB that has run this schema before
+  }
+
+  // Migrate existing DBs: add moisture_threshold_pct if not already present
+  try {
+    db.exec('ALTER TABLE plants ADD COLUMN moisture_threshold_pct INTEGER DEFAULT 30');
+  } catch {
+    // Column already exists
   }
 
   // One-time migration: copy watering_logs → care_events, then drop the old table

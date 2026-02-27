@@ -4,6 +4,13 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+# Images (test photos, sensor snapshots, etc.)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+
 # SQLite :memory: test artifacts
 :memory:
 :memory:-shm
