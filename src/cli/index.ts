@@ -4,6 +4,7 @@ import * as readline from 'readline';
 import dotenv from 'dotenv';
 import { runAgent } from '../agent/graph';
 import { getDb } from '../db/schema';
+import { notify } from '../utils/notify';
 import {
   getAllPlantsWithLatestReading,
   getHealthChecksForPlant,
@@ -100,7 +101,8 @@ logCmd
 program
   .command('remind')
   .description('List plants that are overdue for watering')
-  .action(() => {
+  .option('--notify', 'Fire a desktop notification for each overdue plant')
+  .action((options: { notify?: boolean }) => {
     try {
       const overdue = getPlantsOverdueForWatering();
       if (overdue.length === 0) {
@@ -114,6 +116,22 @@ program
         const interval = `every ${p.watering_interval_days}d`;
         console.log(`  [${p.id}] ${p.name}${species}`);
         console.log(`       Last watered: ${watered}  (${interval})`);
+
+        if (options.notify) {
+          const reading = getLatestSensorReading(p.id);
+          const isFreshReading =
+            reading !== undefined &&
+            Date.now() - new Date(reading.recorded_at).getTime() <= 24 * 60 * 60 * 1000;
+          let body: string;
+          if (isFreshReading && reading) {
+            body = `${p.name} needs water — soil moisture ${reading.moisture_pct}%`;
+          } else if (p.days_since_watered === null) {
+            body = `${p.name} needs water — never watered`;
+          } else {
+            body = `${p.name} needs water — last watered ${formatDaysAgo(p.days_since_watered)}`;
+          }
+          notify(body);
+        }
       }
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
@@ -445,11 +463,19 @@ const helpText: Record<string, string> = {
       npm run log -- repot 1
 `,
   remind: `
-  remind
-    List all plants that are overdue for watering based on their watering interval.
+  remind [options]
+    List all plants that are overdue for watering based on their watering
+    interval or latest soil moisture reading.
+
+    Options:
+      --notify   Fire a macOS desktop notification for each overdue plant
 
     Examples:
       npm run remind
+      npm run remind -- --notify
+
+    Cron usage (every 30 min):
+      */30 * * * * cd /path/to/plantwise && npm run remind -- --notify
 `,
   remove: `
   remove <id>
