@@ -3,14 +3,18 @@ import { Command } from 'commander';
 import * as readline from 'readline';
 import dotenv from 'dotenv';
 import { runAgent } from '../agent/graph';
+import { getDb } from '../db/schema';
 import {
+  getAllPlantsWithLatestReading,
   getHealthChecksForPlant,
+  getLatestSensorReading,
   getPlant,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertPlant,
   listPlants,
   logCareEvent,
+  logSensorReading,
   removePlant,
 } from '../db/queries';
 
@@ -239,6 +243,171 @@ program
     }
   });
 
+// ── Sensor ────────────────────────────────────────────────────────────────────
+
+function moistureBar(pct: number, width = 10): string {
+  const filled = Math.round((pct / 100) * width);
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
+}
+
+function formatRecordedAgo(recorded_at: string): string {
+  const diffMs = Date.now() - new Date(recorded_at).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs === 1 ? '1 hr' : `${hrs} hrs`} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days === 1 ? '1 day' : `${days} days`} ago`;
+}
+
+const sensorCmd = program.command('sensor').description('Manage soil moisture sensor readings');
+
+sensorCmd
+  .command('read <id> <moisture>')
+  .description('Log a soil moisture reading for a plant (0–100)')
+  .option('--source <source>', 'Reading source (manual|emulated|hardware)', 'manual')
+  .action((id: string, moisture: string, options: { source: string }) => {
+    const plantId = parseInt(id, 10);
+    const moisturePct = parseInt(moisture, 10);
+    if (isNaN(plantId)) {
+      console.error('Error: plant ID must be a number');
+      process.exit(1);
+    }
+    if (isNaN(moisturePct) || moisturePct < 0 || moisturePct > 100) {
+      console.error('Error: moisture must be a number between 0 and 100');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+      logSensorReading(plantId, moisturePct, options.source);
+      const status = moisturePct < plant.moisture_threshold_pct ? 'needs water' : 'OK';
+      console.log(
+        `Moisture recorded for ${plant.name} [ID: ${plant.id}]: ${moisturePct}% (threshold: ${plant.moisture_threshold_pct}%) — ${status}`
+      );
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+sensorCmd
+  .command('simulate <id>')
+  .description('Generate an emulated dryout curve for a plant')
+  .option('-d, --days <days>', 'Number of days to simulate', '7')
+  .action((id: string, options: { days: string }) => {
+    const plantId = parseInt(id, 10);
+    const days = parseInt(options.days, 10);
+    if (isNaN(plantId)) {
+      console.error('Error: plant ID must be a number');
+      process.exit(1);
+    }
+    if (isNaN(days) || days < 1) {
+      console.error('Error: --days must be a positive number');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+
+      const db = getDb();
+      const intervalDays = plant.watering_interval_days;
+      const totalHours = days * 24;
+      // Exponential decay: 90% → 10% over watering_interval_days
+      const decayRate = Math.log(90 / 10) / (intervalDays * 24);
+      let count = 0;
+
+      const insertReading = db.prepare(
+        "INSERT INTO sensor_readings (plant_id, moisture_pct, source, recorded_at) VALUES (?, ?, 'emulated', datetime('now', ?))"
+      );
+
+      const insertMany = db.transaction(() => {
+        for (let h = totalHours; h >= 0; h--) {
+          const rawMoisture = 90 * Math.exp(-decayRate * (totalHours - h));
+          const noise = (Math.random() - 0.5) * 10;
+          const moisture = Math.min(100, Math.max(0, Math.round(rawMoisture + noise)));
+          const offset = `-${h} hours`;
+          insertReading.run(plantId, moisture, offset);
+          count++;
+        }
+      });
+
+      insertMany();
+
+      const latest = getLatestSensorReading(plantId);
+      const currentMoisture = latest?.moisture_pct ?? 0;
+      const status = currentMoisture < plant.moisture_threshold_pct ? 'needs water' : 'OK';
+      console.log(
+        `Simulated ${count} readings for ${plant.name} [ID: ${plant.id}] over ${days} day${days === 1 ? '' : 's'}`
+      );
+      console.log(
+        `Current simulated moisture: ${currentMoisture}% (threshold: ${plant.moisture_threshold_pct}%) — ${status}`
+      );
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+sensorCmd
+  .command('status [id]')
+  .description('Show the latest moisture reading for one or all plants')
+  .action((id?: string) => {
+    try {
+      if (id !== undefined) {
+        const plantId = parseInt(id, 10);
+        if (isNaN(plantId)) {
+          console.error('Error: plant ID must be a number');
+          process.exit(1);
+        }
+        const plant = getPlant(plantId);
+        if (!plant) {
+          console.error(`Error: No plant found with ID ${plantId}`);
+          process.exit(1);
+        }
+        const reading = getLatestSensorReading(plantId);
+        if (!reading) {
+          console.log(`${plant.name} [ID: ${plant.id}] — no sensor readings yet`);
+          return;
+        }
+        const status = reading.moisture_pct < plant.moisture_threshold_pct ? 'Needs water' : 'OK';
+        console.log(
+          `${plant.name} [ID: ${plant.id}]  ${reading.moisture_pct}%  ${moistureBar(reading.moisture_pct)}  ${status}  (${formatRecordedAgo(reading.recorded_at)})`
+        );
+      } else {
+        const plants = getAllPlantsWithLatestReading();
+        if (plants.length === 0) {
+          console.log('No plants in your collection yet.');
+          return;
+        }
+        console.log('\nSoil moisture status:\n');
+        for (const p of plants) {
+          if (p.moisture_pct === null) {
+            console.log(`  [${p.id}] ${p.name.padEnd(18)} —    no readings yet`);
+          } else {
+            const status =
+              p.moisture_pct < p.moisture_threshold_pct ? 'Needs water' : 'OK         ';
+            const ago = formatRecordedAgo(p.recorded_at ?? '');
+            console.log(
+              `  [${p.id}] ${p.name.padEnd(18)} ${String(p.moisture_pct).padStart(3)}%  ${moistureBar(p.moisture_pct)}  ${status}  (${ago})`
+            );
+          }
+        }
+        console.log();
+      }
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 const helpText: Record<string, string> = {
   add: `
   add <name> [options]
@@ -315,6 +484,29 @@ const helpText: Record<string, string> = {
       npm run diagnose -- ./photo.jpg
       npm run diagnose -- ./photo.jpg --plant 1
 `,
+  sensor: `
+  sensor <subcommand> [args]
+    Manage soil moisture sensor readings.
+
+    Subcommands:
+      read <id> <moisture>   Log a moisture reading (0–100) for a plant
+      simulate <id>          Generate an emulated dryout curve
+      status [id]            Show latest moisture for one or all plants
+
+    Options (read):
+      --source <source>   Reading source: manual | emulated | hardware (default: manual)
+
+    Options (simulate):
+      --days <n>          Number of days to simulate (default: 7)
+
+    Examples:
+      npm run sensor -- read 1 45
+      npm run sensor -- read 1 42 --source hardware
+      npm run sensor -- simulate 1
+      npm run sensor -- simulate 1 --days 14
+      npm run sensor -- status
+      npm run sensor -- status 1
+`,
   help: `
   help [command]
     Show help for all commands, or detailed help for a specific command.
@@ -348,6 +540,7 @@ COMMANDS
 
   add       Add a plant to your collection
   log       Log a care event (water / feed / repot)
+  sensor    Manage soil moisture sensor readings
   remind    List plants overdue for watering
   remove    Remove a plant from your collection
   status    List your collection or view a plant's health history
@@ -359,6 +552,7 @@ Run "npm run help -- <command>" for usage examples.
 
   npm run help -- add
   npm run help -- log
+  npm run help -- sensor
   npm run help -- remind
   npm run help -- remove
   npm run help -- status

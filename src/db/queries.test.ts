@@ -4,21 +4,26 @@ process.env['DB_PATH'] = ':memory:';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from './schema';
 import {
+  getAllPlantsWithLatestReading,
   getHealthChecksForPlant,
   getLastCareEvent,
+  getLatestSensorReading,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertHealthCheck,
   insertPlant,
   listPlants,
   logCareEvent,
+  logSensorReading,
   removePlant,
 } from './queries';
 
 describe('DB queries', () => {
   beforeEach(() => {
     const db = getDb();
-    db.exec('DELETE FROM care_events; DELETE FROM health_checks; DELETE FROM plants;');
+    db.exec(
+      'DELETE FROM sensor_readings; DELETE FROM care_events; DELETE FROM health_checks; DELETE FROM plants;'
+    );
   });
 
   describe('insertPlant', () => {
@@ -220,6 +225,103 @@ describe('DB queries', () => {
       insertHealthCheck(plant.id, '/p.jpg', {}, 'ok');
       removePlant(plant.id);
       expect(getHealthChecksForPlant(plant.id)).toHaveLength(0);
+    });
+
+    it('deletes associated sensor_readings', () => {
+      const plant = insertPlant('Cactus');
+      logSensorReading(plant.id, 55);
+      removePlant(plant.id);
+      const rows = getDb()
+        .prepare('SELECT * FROM sensor_readings WHERE plant_id = ?')
+        .all(plant.id);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  describe('logSensorReading', () => {
+    it('inserts a reading and returns it', () => {
+      const plant = insertPlant('Fern');
+      const reading = logSensorReading(plant.id, 45);
+      expect(reading.plant_id).toBe(plant.id);
+      expect(reading.moisture_pct).toBe(45);
+      expect(reading.source).toBe('manual');
+      expect(reading.recorded_at).toBeTypeOf('string');
+    });
+
+    it('stores the provided source', () => {
+      const plant = insertPlant('Basil');
+      const reading = logSensorReading(plant.id, 72, 'hardware');
+      expect(reading.source).toBe('hardware');
+    });
+
+    it('throws if the plant does not exist (FK constraint)', () => {
+      expect(() => logSensorReading(99999, 50)).toThrow();
+    });
+
+    it('rejects moisture_pct outside 0–100', () => {
+      const plant = insertPlant('Orchid');
+      expect(() => logSensorReading(plant.id, 101)).toThrow();
+      expect(() => logSensorReading(plant.id, -1)).toThrow();
+    });
+  });
+
+  describe('getLatestSensorReading', () => {
+    it('returns undefined when no readings exist', () => {
+      const plant = insertPlant('Cactus');
+      expect(getLatestSensorReading(plant.id)).toBeUndefined();
+    });
+
+    it('returns the most recent reading', () => {
+      const plant = insertPlant('Mint');
+      logSensorReading(plant.id, 60);
+      getDb()
+        .prepare(
+          "INSERT INTO sensor_readings (plant_id, moisture_pct, source, recorded_at) VALUES (?, 30, 'manual', datetime('now', '+1 hour'))"
+        )
+        .run(plant.id);
+      const latest = getLatestSensorReading(plant.id);
+      expect(latest?.moisture_pct).toBe(30);
+    });
+  });
+
+  describe('getAllPlantsWithLatestReading', () => {
+    it('returns all plants, with null moisture for plants with no readings', () => {
+      insertPlant('Aloe');
+      insertPlant('Basil');
+      const results = getAllPlantsWithLatestReading();
+      expect(results).toHaveLength(2);
+      expect(results.every((p) => p.moisture_pct === null)).toBe(true);
+    });
+
+    it('returns the latest moisture reading per plant', () => {
+      const plant = insertPlant('Fern');
+      logSensorReading(plant.id, 80);
+      logSensorReading(plant.id, 40);
+      const results = getAllPlantsWithLatestReading();
+      const fern = results.find((p) => p.id === plant.id);
+      expect(fern?.moisture_pct).toBe(40);
+    });
+  });
+
+  describe('getPlantsOverdueForWatering (sensor-aware)', () => {
+    it('excludes a plant with a fresh reading above threshold', () => {
+      const plant = insertPlant('Succulent');
+      logSensorReading(plant.id, 80); // well above default 30% threshold
+      const overdue = getPlantsOverdueForWatering();
+      expect(overdue.some((p) => p.id === plant.id)).toBe(false);
+    });
+
+    it('includes a plant with a fresh reading below threshold', () => {
+      const plant = insertPlant('Fern');
+      logSensorReading(plant.id, 10); // below default 30% threshold
+      const overdue = getPlantsOverdueForWatering();
+      expect(overdue.some((p) => p.id === plant.id)).toBe(true);
+    });
+
+    it('falls back to time-based logic when no sensor readings exist', () => {
+      insertPlant('Orchid'); // never watered, no readings
+      const overdue = getPlantsOverdueForWatering();
+      expect(overdue.some((p) => p.name === 'Orchid')).toBe(true);
     });
   });
 });
