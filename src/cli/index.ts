@@ -10,7 +10,7 @@ import {
   getPlantsOverdueForWatering,
   insertPlant,
   listPlants,
-  logWatering,
+  logCareEvent,
   removePlant,
 } from '../db/queries';
 
@@ -44,10 +44,10 @@ program
     }
   });
 
-program
-  .command('water <id>')
-  .description('Log that you watered a plant')
-  .action((id: string) => {
+const logCmd = program.command('log').description('Log a care event for a plant');
+
+function makeLogAction(type: string, pastTense: string) {
+  return (id: string, options: { notes?: string }) => {
     const plantId = parseInt(id, 10);
     if (isNaN(plantId)) {
       console.error('Error: plant ID must be a number');
@@ -59,14 +59,34 @@ program
         console.error(`Error: No plant found with ID ${plantId}`);
         process.exit(1);
       }
-      const log = logWatering(plantId);
-      const date = log.watered_at.split('T')[0] ?? log.watered_at;
-      console.log(`Watered ${plant.name} [ID: ${plant.id}] on ${date}`);
+      const event = logCareEvent(plantId, type, options.notes);
+      const date = event.occurred_at.split('T')[0] ?? event.occurred_at;
+      const notesStr = event.notes ? ` — ${event.notes}` : '';
+      console.log(`${pastTense} ${plant.name} [ID: ${plant.id}] on ${date}${notesStr}`);
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
     }
-  });
+  };
+}
+
+logCmd
+  .command('water <id>')
+  .description('Log that you watered a plant')
+  .option('-n, --notes <notes>', 'Optional notes')
+  .action(makeLogAction('water', 'Watered'));
+
+logCmd
+  .command('feed <id>')
+  .description('Log that you fed a plant')
+  .option('-n, --notes <notes>', 'Optional notes')
+  .action(makeLogAction('feed', 'Fed'));
+
+logCmd
+  .command('repot <id>')
+  .description('Log that you repotted a plant')
+  .option('-n, --notes <notes>', 'Optional notes')
+  .action(makeLogAction('repot', 'Repotted'));
 
 program
   .command('remind')
@@ -233,12 +253,22 @@ const helpText: Record<string, string> = {
       npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
       npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
 `,
-  water: `
-  water <id>
-    Log that you watered a plant.
+  log: `
+  log <subcommand> <id> [options]
+    Log a care event for a plant.
+
+    Subcommands:
+      water   Log a watering
+      feed    Log a feeding
+      repot   Log a repot
+
+    Options:
+      --notes <notes>   Optional notes about the event
 
     Examples:
-      npm run water -- 1
+      npm run log -- water 1
+      npm run log -- feed 1 --notes "Osmocote"
+      npm run log -- repot 1
 `,
   remind: `
   remind
@@ -317,7 +347,7 @@ PlantWise — AI-powered houseplant care assistant
 COMMANDS
 
   add       Add a plant to your collection
-  water     Log that you watered a plant
+  log       Log a care event (water / feed / repot)
   remind    List plants overdue for watering
   remove    Remove a plant from your collection
   status    List your collection or view a plant's health history
@@ -328,7 +358,7 @@ COMMANDS
 Run "npm run help -- <command>" for usage examples.
 
   npm run help -- add
-  npm run help -- water
+  npm run help -- log
   npm run help -- remind
   npm run help -- remove
   npm run help -- status

@@ -18,10 +18,12 @@ export interface HealthCheck {
   created_at: string;
 }
 
-export interface WateringLog {
+export interface CareEvent {
   id: number;
   plant_id: number;
-  watered_at: string;
+  type: string;
+  notes: string | null;
+  occurred_at: string;
 }
 
 export interface PlantWithWatering extends Plant {
@@ -52,8 +54,8 @@ export function removePlant(id: number): boolean {
   const deleteAll = db.transaction((plantId: number) => {
     // health_checks has no ON DELETE CASCADE so must be deleted explicitly
     db.prepare('DELETE FROM health_checks WHERE plant_id = ?').run(plantId);
-    // watering_logs has ON DELETE CASCADE but deleting explicitly is harmless
-    db.prepare('DELETE FROM watering_logs WHERE plant_id = ?').run(plantId);
+    // care_events has ON DELETE CASCADE but deleting explicitly is harmless
+    db.prepare('DELETE FROM care_events WHERE plant_id = ?').run(plantId);
     const result = db.prepare('DELETE FROM plants WHERE id = ?').run(plantId);
     return result.changes > 0;
   });
@@ -89,20 +91,22 @@ export function listRecentHealthChecks(limit = 10): HealthCheck[] {
     .all(limit) as HealthCheck[];
 }
 
-// ── Watering ──────────────────────────────────────────────────────────────────
+// ── Care events ───────────────────────────────────────────────────────────────
 
-export function logWatering(plantId: number): WateringLog {
+export function logCareEvent(plantId: number, type: string, notes?: string): CareEvent {
   const db = getDb();
   return db
-    .prepare('INSERT INTO watering_logs (plant_id) VALUES (?) RETURNING *')
-    .get(plantId) as WateringLog;
+    .prepare('INSERT INTO care_events (plant_id, type, notes) VALUES (?, ?, ?) RETURNING *')
+    .get(plantId, type, notes ?? null) as CareEvent;
 }
 
-export function getLastWatering(plantId: number): WateringLog | undefined {
+export function getLastCareEvent(plantId: number, type: string): CareEvent | undefined {
   const db = getDb();
   return db
-    .prepare('SELECT * FROM watering_logs WHERE plant_id = ? ORDER BY watered_at DESC LIMIT 1')
-    .get(plantId) as WateringLog | undefined;
+    .prepare(
+      'SELECT * FROM care_events WHERE plant_id = ? AND type = ? ORDER BY occurred_at DESC LIMIT 1'
+    )
+    .get(plantId, type) as CareEvent | undefined;
 }
 
 const PLANT_WITH_WATERING_SQL = `
@@ -115,8 +119,9 @@ const PLANT_WITH_WATERING_SQL = `
     END AS days_since_watered
   FROM plants p
   LEFT JOIN (
-    SELECT plant_id, MAX(watered_at) AS last_watered_at
-    FROM watering_logs
+    SELECT plant_id, MAX(occurred_at) AS last_watered_at
+    FROM care_events
+    WHERE type = 'water'
     GROUP BY plant_id
   ) wl ON p.id = wl.plant_id
 `;

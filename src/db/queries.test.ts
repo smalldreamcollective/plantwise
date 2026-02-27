@@ -5,20 +5,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from './schema';
 import {
   getHealthChecksForPlant,
-  getLastWatering,
+  getLastCareEvent,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertHealthCheck,
   insertPlant,
   listPlants,
-  logWatering,
+  logCareEvent,
   removePlant,
 } from './queries';
 
 describe('DB queries', () => {
   beforeEach(() => {
     const db = getDb();
-    db.exec('DELETE FROM watering_logs; DELETE FROM health_checks; DELETE FROM plants;');
+    db.exec('DELETE FROM care_events; DELETE FROM health_checks; DELETE FROM plants;');
   });
 
   describe('insertPlant', () => {
@@ -97,38 +97,52 @@ describe('DB queries', () => {
     });
   });
 
-  describe('logWatering', () => {
-    it('inserts a watering log and returns it', () => {
+  describe('logCareEvent', () => {
+    it('inserts a care event and returns it', () => {
       const plant = insertPlant('Fern');
-      const log = logWatering(plant.id);
-      expect(log.plant_id).toBe(plant.id);
-      expect(log.watered_at).toBeTypeOf('string');
-      expect(log.id).toBeTypeOf('number');
+      const event = logCareEvent(plant.id, 'water');
+      expect(event.plant_id).toBe(plant.id);
+      expect(event.type).toBe('water');
+      expect(event.notes).toBeNull();
+      expect(event.occurred_at).toBeTypeOf('string');
+      expect(event.id).toBeTypeOf('number');
+    });
+
+    it('stores optional notes', () => {
+      const plant = insertPlant('Basil');
+      const event = logCareEvent(plant.id, 'feed', 'Osmocote');
+      expect(event.notes).toBe('Osmocote');
     });
 
     it('throws if the plant does not exist (FK constraint)', () => {
-      expect(() => logWatering(99999)).toThrow();
+      expect(() => logCareEvent(99999, 'water')).toThrow();
     });
   });
 
-  describe('getLastWatering', () => {
-    it('returns undefined when never watered', () => {
+  describe('getLastCareEvent', () => {
+    it('returns undefined when no events of that type exist', () => {
       const plant = insertPlant('Cactus');
-      expect(getLastWatering(plant.id)).toBeUndefined();
+      expect(getLastCareEvent(plant.id, 'water')).toBeUndefined();
     });
 
-    it('returns the most recent watering when multiple exist', () => {
+    it('returns the most recent event when multiple exist', () => {
       const plant = insertPlant('Basil');
-      const firstLog = logWatering(plant.id);
+      const firstEvent = logCareEvent(plant.id, 'water');
       getDb()
         .prepare(
-          "INSERT INTO watering_logs (plant_id, watered_at) VALUES (?, datetime('now', '+1 day'))"
+          "INSERT INTO care_events (plant_id, type, occurred_at) VALUES (?, 'water', datetime('now', '+1 day'))"
         )
         .run(plant.id);
-      const last = getLastWatering(plant.id);
+      const last = getLastCareEvent(plant.id, 'water');
       expect(last).toBeDefined();
-      // The returned record should be the later of the two waterings
-      expect(last?.watered_at > firstLog.watered_at).toBe(true);
+      // The returned record should be the later of the two events
+      expect(last?.occurred_at > firstEvent.occurred_at).toBe(true);
+    });
+
+    it('returns only events of the requested type', () => {
+      const plant = insertPlant('Mint');
+      logCareEvent(plant.id, 'feed');
+      expect(getLastCareEvent(plant.id, 'water')).toBeUndefined();
     });
   });
 
@@ -141,7 +155,7 @@ describe('DB queries', () => {
 
     it('excludes a plant watered today with a 7-day interval', () => {
       const plant = insertPlant('Succulent');
-      logWatering(plant.id);
+      logCareEvent(plant.id, 'water');
       const overdue = getPlantsOverdueForWatering();
       expect(overdue.some((p) => p.id === plant.id)).toBe(false);
     });
@@ -150,7 +164,7 @@ describe('DB queries', () => {
       const plant = insertPlant('Fern');
       getDb()
         .prepare(
-          "INSERT INTO watering_logs (plant_id, watered_at) VALUES (?, datetime('now', '-10 days'))"
+          "INSERT INTO care_events (plant_id, type, occurred_at) VALUES (?, 'water', datetime('now', '-10 days'))"
         )
         .run(plant.id);
       const overdue = getPlantsOverdueForWatering();
@@ -173,7 +187,7 @@ describe('DB queries', () => {
 
     it('returns days_since_watered = 0 after watering today', () => {
       const plant = insertPlant('Mint');
-      logWatering(plant.id);
+      logCareEvent(plant.id, 'water');
       const result = getPlantWithWatering(plant.id);
       expect(result?.last_watered_at).toBeTypeOf('string');
       expect(result?.days_since_watered).toBe(0);
@@ -191,11 +205,13 @@ describe('DB queries', () => {
       expect(getPlantWithWatering(plant.id)).toBeUndefined();
     });
 
-    it('deletes associated watering_logs', () => {
+    it('deletes associated care_events', () => {
       const plant = insertPlant('Rose');
-      logWatering(plant.id);
+      logCareEvent(plant.id, 'water');
       removePlant(plant.id);
-      const rows = getDb().prepare('SELECT * FROM watering_logs WHERE plant_id = ?').all(plant.id);
+      const rows = getDb()
+        .prepare("SELECT * FROM care_events WHERE plant_id = ? AND type = 'water'")
+        .all(plant.id);
       expect(rows).toHaveLength(0);
     });
 
