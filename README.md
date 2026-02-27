@@ -40,7 +40,7 @@ npm run help
 
 # Detailed help for a specific command
 npm run help -- add
-npm run help -- water
+npm run help -- log
 npm run help -- remind
 npm run help -- remove
 npm run help -- status
@@ -60,10 +60,17 @@ npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
 npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
 ```
 
-### `water` — Log that you watered a plant *(direct)*
+### `log` — Log a care event for a plant *(direct)*
 
 ```bash
-npm run water -- 1
+# Log a watering
+npm run log -- water 1
+
+# Log a feeding with notes
+npm run log -- feed 1 --notes "Osmocote"
+
+# Log a repot
+npm run log -- repot 1
 ```
 
 ### `remind` — List plants overdue for watering *(direct)*
@@ -80,7 +87,7 @@ Shows every plant whose last watering exceeds its interval (default: 7 days), or
 npm run remove -- 1
 ```
 
-Prompts for confirmation before deleting the plant and all its associated watering logs and health checks.
+Prompts for confirmation before deleting the plant and all its associated care events and health checks.
 
 ### `status` — View your collection *(direct)*
 
@@ -141,4 +148,4 @@ Plant data is stored in a local SQLite database (`plantwise.db` by default). The
 Three tables:
 - **plants** — your collection (name, species, notes, watering interval)
 - **health_checks** — diagnosis history per plant, including raw Plant.id API responses
-- **watering_logs** — timestamped watering events per plant
+- **care_events** — timestamped care events per plant (type: `water`, `feed`, `repot`, etc.)

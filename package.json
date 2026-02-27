@@ -12,7 +12,7 @@
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "add": "tsx src/cli/index.ts add",
-    "water": "tsx src/cli/index.ts water",
+    "log": "tsx src/cli/index.ts log",
     "remind": "tsx src/cli/index.ts remind",
     "remove": "tsx src/cli/index.ts remove",
     "status": "tsx src/cli/index.ts status",

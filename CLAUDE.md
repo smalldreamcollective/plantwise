@@ -32,10 +32,13 @@ Never read .env files.
 - Use Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`
 - Pre-commit hook runs lint-staged automatically — do not skip with `--no-verify`
 - Run `npm test` before opening a PR
+- **Always update README.md and the `help-guide` command in `src/cli/index.ts`** whenever commands are added, changed, or removed
+- **Every feature must have a PRD in `docs/prd/`** — create or update the relevant file before writing code. Naming: `phase-Nx-short-description.md`
 
 ## Current phase
-Phase 2 complete — dev tooling (ESLint, Prettier, Husky, Vitest, CI) set up.
+Phase 3C complete — care_events table + log subcommand group (water/feed/repot). See `docs/prd/` for all phase PRDs.
 
 ## Known issues / decisions pending
-[Keep this updated]
+- Multi-user / hosted is a future goal. When that phase begins: add `user_id` to all tables, switch to UUID primary keys, introduce an API layer, evaluate Supabase or MongoDB Atlas as the backend.
+- Each feature should have a PRD in `docs/prd/`. When adding or changing features, create or update the relevant PRD file.
 

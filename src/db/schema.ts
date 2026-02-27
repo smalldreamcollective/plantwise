@@ -37,10 +37,12 @@ function initSchema(db: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS watering_logs (
+    CREATE TABLE IF NOT EXISTS care_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
-      watered_at TEXT NOT NULL DEFAULT (datetime('now'))
+      type TEXT NOT NULL,
+      notes TEXT,
+      occurred_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
@@ -49,5 +51,17 @@ function initSchema(db: Database.Database): void {
     db.exec('ALTER TABLE plants ADD COLUMN watering_interval_days INTEGER DEFAULT 7');
   } catch {
     // Column already exists — expected for any DB that has run this schema before
+  }
+
+  // One-time migration: copy watering_logs → care_events, then drop the old table
+  // Silently fails on fresh installs (watering_logs won't exist)
+  try {
+    db.exec(`
+      INSERT INTO care_events (plant_id, type, notes, occurred_at)
+      SELECT plant_id, 'water', NULL, watered_at FROM watering_logs
+    `);
+    db.exec('DROP TABLE IF EXISTS watering_logs');
+  } catch {
+    // watering_logs doesn't exist — fresh install or already migrated
   }
 }
