@@ -1,14 +1,31 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import * as readline from 'readline';
 import dotenv from 'dotenv';
 import { runAgent } from '../agent/graph';
-import { insertPlant, listPlants } from '../db/queries';
+import {
+  getHealthChecksForPlant,
+  getPlant,
+  getPlantWithWatering,
+  getPlantsOverdueForWatering,
+  insertPlant,
+  listPlants,
+  logWatering,
+  removePlant,
+} from '../db/queries';
 
 dotenv.config();
 
 const program = new Command();
 
 program.name('plantwise').description('AI-powered houseplant care assistant').version('0.1.0');
+
+function formatDaysAgo(days: number | null): string {
+  if (days === null) return 'never';
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
+}
 
 program
   .command('add <name>')
@@ -21,6 +38,92 @@ program
       console.log(
         `Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`
       );
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('water <id>')
+  .description('Log that you watered a plant')
+  .action((id: string) => {
+    const plantId = parseInt(id, 10);
+    if (isNaN(plantId)) {
+      console.error('Error: plant ID must be a number');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+      const log = logWatering(plantId);
+      const date = log.watered_at.split('T')[0] ?? log.watered_at;
+      console.log(`Watered ${plant.name} [ID: ${plant.id}] on ${date}`);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('remind')
+  .description('List plants that are overdue for watering')
+  .action(() => {
+    try {
+      const overdue = getPlantsOverdueForWatering();
+      if (overdue.length === 0) {
+        console.log('All plants are on schedule. Nothing needs watering right now.');
+        return;
+      }
+      console.log(`Plants overdue for watering (${overdue.length}):\n`);
+      for (const p of overdue) {
+        const species = p.species ? ` — ${p.species}` : '';
+        const watered = formatDaysAgo(p.days_since_watered);
+        const interval = `every ${p.watering_interval_days}d`;
+        console.log(`  [${p.id}] ${p.name}${species}`);
+        console.log(`       Last watered: ${watered}  (${interval})`);
+      }
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('remove <id>')
+  .description('Remove a plant from your collection')
+  .action(async (id: string) => {
+    const plantId = parseInt(id, 10);
+    if (isNaN(plantId)) {
+      console.error('Error: plant ID must be a number');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const answer = await new Promise<string>((resolve) => {
+        rl.question(
+          `Remove "${plant.name}" [ID: ${plant.id}] and all its history? (y/N) `,
+          resolve
+        );
+      });
+      rl.close();
+
+      if (answer.trim().toLowerCase() !== 'y') {
+        console.log('Cancelled.');
+        return;
+      }
+
+      removePlant(plantId);
+      console.log(`Removed "${plant.name}" [ID: ${plant.id}]`);
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
@@ -63,41 +166,55 @@ program
   .command('status')
   .description('View your plant collection and health history')
   .option('-p, --plant <id>', 'Show status for a specific plant ID', parseInt)
-  .action(async (options: { plant?: number }) => {
+  .action((options: { plant?: number }) => {
     const plantId = options.plant ?? null;
 
-    let userMessage: string;
     if (plantId) {
-      userMessage = `Show the status and health history for plant ID ${plantId}. Use get_plant and get_plant_history tools, then summarize the plant's condition and history.`;
-    } else {
-      // For listing all plants, we can do it directly without the agent for speed
       try {
-        const plants = listPlants();
-        if (plants.length === 0) {
-          console.log(
-            'No plants in your collection yet. Use "plantwise add <name>" to get started.'
-          );
-          return;
+        const plant = getPlantWithWatering(plantId);
+        if (!plant) {
+          console.error(`Error: No plant found with ID ${plantId}`);
+          process.exit(1);
         }
-        console.log(`Your plants (${plants.length}):\n`);
-        for (const p of plants) {
-          const species = p.species ? ` — ${p.species}` : '';
-          const notes = p.notes ? `\n     Notes: ${p.notes}` : '';
-          console.log(`  [${p.id}] ${p.name}${species}${notes}`);
+        const species = plant.species ? ` (${plant.species})` : '';
+        console.log(`\n${plant.name}${species} [ID: ${plant.id}]`);
+        if (plant.notes) console.log(`  Notes: ${plant.notes}`);
+        console.log(`  Watering interval: every ${plant.watering_interval_days} days`);
+        console.log(`  Last watered: ${formatDaysAgo(plant.days_since_watered)}`);
+
+        const checks = getHealthChecksForPlant(plantId);
+        if (checks.length === 0) {
+          console.log('\n  No health checks recorded yet.');
+        } else {
+          console.log(`\n  Health history (${checks.length}):`);
+          for (const c of checks) {
+            const date = c.created_at.split('T')[0] ?? c.created_at;
+            console.log(`    [${date}] ${c.diagnosis}`);
+          }
         }
-        return;
+        console.log();
       } catch (err) {
-        console.error('Error reading database:', err instanceof Error ? err.message : err);
+        console.error('Error:', err instanceof Error ? err.message : err);
         process.exit(1);
-        return;
       }
+      return;
     }
 
+    // No --plant flag: list all plants directly
     try {
-      const result = await runAgent('status', null, plantId, userMessage);
-      console.log(result);
+      const plants = listPlants();
+      if (plants.length === 0) {
+        console.log('No plants in your collection yet. Use "plantwise add <name>" to get started.');
+        return;
+      }
+      console.log(`Your plants (${plants.length}):\n`);
+      for (const p of plants) {
+        const species = p.species ? ` — ${p.species}` : '';
+        const notes = p.notes ? `\n     Notes: ${p.notes}` : '';
+        console.log(`  [${p.id}] ${p.name}${species}${notes}`);
+      }
     } catch (err) {
-      console.error('Error:', err instanceof Error ? err.message : err);
+      console.error('Error reading database:', err instanceof Error ? err.message : err);
       process.exit(1);
     }
   });
@@ -116,12 +233,33 @@ const helpText: Record<string, string> = {
       npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
       npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
 `,
+  water: `
+  water <id>
+    Log that you watered a plant.
+
+    Examples:
+      npm run water -- 1
+`,
+  remind: `
+  remind
+    List all plants that are overdue for watering based on their watering interval.
+
+    Examples:
+      npm run remind
+`,
+  remove: `
+  remove <id>
+    Remove a plant and all its history from your collection (prompts for confirmation).
+
+    Examples:
+      npm run remove -- 1
+`,
   status: `
   status [options]
     List all plants, or show health history for a specific plant.
 
     Options:
-      --plant <id>   Plant ID to show detailed history for (requires API keys)
+      --plant <id>   Plant ID to show detailed status and history
 
     Examples:
       npm run status
@@ -179,6 +317,9 @@ PlantWise — AI-powered houseplant care assistant
 COMMANDS
 
   add       Add a plant to your collection
+  water     Log that you watered a plant
+  remind    List plants overdue for watering
+  remove    Remove a plant from your collection
   status    List your collection or view a plant's health history
   identify  Identify a plant from a photo (requires API keys)
   diagnose  Assess plant health from a photo (requires API keys)
@@ -187,6 +328,9 @@ COMMANDS
 Run "npm run help -- <command>" for usage examples.
 
   npm run help -- add
+  npm run help -- water
+  npm run help -- remind
+  npm run help -- remove
   npm run help -- status
   npm run help -- identify
   npm run help -- diagnose

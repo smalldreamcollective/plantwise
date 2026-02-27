@@ -24,6 +24,7 @@ function initSchema(db: Database.Database): void {
       name TEXT NOT NULL,
       species TEXT,
       notes TEXT,
+      watering_interval_days INTEGER DEFAULT 7,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -35,5 +36,18 @@ function initSchema(db: Database.Database): void {
       diagnosis TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS watering_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+      watered_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+
+  // Migrate existing DBs: add watering_interval_days if not already present
+  try {
+    db.exec('ALTER TABLE plants ADD COLUMN watering_interval_days INTEGER DEFAULT 7');
+  } catch {
+    // Column already exists — expected for any DB that has run this schema before
+  }
 }
