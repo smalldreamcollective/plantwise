@@ -24,6 +24,11 @@ const program = new Command();
 
 program.name('plantwise').description('AI-powered houseplant care assistant').version('0.1.0');
 
+function formatDate(datetime: string): string {
+  // SQLite datetime('now') uses a space separator ("2026-02-27 03:37:00"), not 'T'
+  return datetime.split(/[T ]/)[0] ?? datetime;
+}
+
 function formatDaysAgo(days: number | null): string {
   if (days === null) return 'never';
   if (days === 0) return 'today';
@@ -64,7 +69,7 @@ function makeLogAction(type: string, pastTense: string) {
         process.exit(1);
       }
       const event = logCareEvent(plantId, type, options.notes);
-      const date = event.occurred_at.split('T')[0] ?? event.occurred_at;
+      const date = formatDate(event.occurred_at);
       const notesStr = event.notes ? ` — ${event.notes}` : '';
       console.log(`${pastTense} ${plant.name} [ID: ${plant.id}] on ${date}${notesStr}`);
     } catch (err) {
@@ -212,7 +217,7 @@ program
         } else {
           console.log(`\n  Health history (${checks.length}):`);
           for (const c of checks) {
-            const date = c.created_at.split('T')[0] ?? c.created_at;
+            const date = formatDate(c.created_at);
             console.log(`    [${date}] ${c.diagnosis}`);
           }
         }
