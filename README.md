@@ -76,10 +76,21 @@ npm run log -- repot 1
 ### `remind` — List plants overdue for watering *(direct)*
 
 ```bash
+# List overdue plants
 npm run remind
+
+# List overdue plants + fire a desktop notification for each
+npm run remind -- --notify
 ```
 
-Shows every plant whose last watering exceeds its interval (default: 7 days), ordered by most overdue first. Plants that have never been watered are always listed.
+Shows every plant whose last watering exceeds its interval (default: 7 days), ordered by most overdue first. Plants that have never been watered are always listed. When soil moisture sensor data is available, moisture levels take priority over time-based logic.
+
+**Notifications (macOS):** `--notify` fires a native notification per overdue plant via `osascript`. If notifications don't appear, enable them in **System Settings → Notifications → iTerm2** (or whichever terminal you use) and set to Banners or Alerts.
+
+**Cron setup** — run every 30 minutes automatically:
+```bash
+*/30 * * * * cd /path/to/plantwise && npm run remind -- --notify >> /tmp/plantwise.log 2>&1
+```
 
 ### `remove` — Remove a plant from your collection *(direct)*
 
@@ -145,7 +156,8 @@ npm run build
 
 Plant data is stored in a local SQLite database (`plantwise.db` by default). The location can be changed via `DB_PATH` in `.env`.
 
-Three tables:
-- **plants** — your collection (name, species, notes, watering interval)
+Four tables:
+- **plants** — your collection (name, species, notes, watering interval, moisture threshold)
 - **health_checks** — diagnosis history per plant, including raw Plant.id API responses
 - **care_events** — timestamped care events per plant (type: `water`, `feed`, `repot`, etc.)
+- **sensor_readings** — soil moisture readings per plant (source: `manual`, `emulated`, or `hardware`)
