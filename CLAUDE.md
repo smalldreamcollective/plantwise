@@ -41,4 +41,5 @@ Phase 3C complete — care_events table + log subcommand group (water/feed/repot
 ## Known issues / decisions pending
 - Multi-user / hosted is a future goal. When that phase begins: add `user_id` to all tables, switch to UUID primary keys, introduce an API layer, evaluate Supabase or MongoDB Atlas as the backend.
 - Each feature should have a PRD in `docs/prd/`. When adding or changing features, create or update the relevant PRD file.
+- **Phase 4C uses MQTT (Mosquitto broker), not HTTP.** MQTT was chosen over Express/HTTP because the long-term vision involves multiple Pi controllers (Sonos-style multi-room). MQTT's pub/sub model lets new devices join with zero server config changes and supports remote command dispatch. HTTP API is deferred to Phase 4D alongside the web UI.
 
