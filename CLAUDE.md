@@ -41,5 +41,6 @@ Phase 3C complete — care_events table + log subcommand group (water/feed/repot
 ## Known issues / decisions pending
 - Multi-user / hosted is a future goal. When that phase begins: add `user_id` to all tables, switch to UUID primary keys, introduce an API layer, evaluate Supabase or MongoDB Atlas as the backend.
 - Each feature should have a PRD in `docs/prd/`. When adding or changing features, create or update the relevant PRD file.
-- **Phase 4C uses MQTT (Mosquitto broker), not HTTP.** MQTT was chosen over Express/HTTP because the long-term vision involves multiple Pi controllers (Sonos-style multi-room). MQTT's pub/sub model lets new devices join with zero server config changes and supports remote command dispatch. HTTP API is deferred to Phase 4D alongside the web UI.
+- **Phase 4C uses MQTT (Mosquitto broker), not HTTP.** MQTT was chosen over Express/HTTP because the long-term vision involves multiple MCU types (BeagleBone Black, Pi Zero W, IEIK ESP32 — Sonos-style multi-room). MQTT's pub/sub model lets new devices join with zero server config changes and supports remote command dispatch. HTTP API is deferred to Phase 4D alongside the web UI.
+- **Phase 5 adds pump actuation.** Hardware: Adafruit 3V DC submersible pump [ID:4546] switched via transistor/MOSFET from MCU GPIO. Supports auto-watering (moisture threshold) and manual CLI command. Safety limits: 30s max run, 1hr min interval per plant.
 
