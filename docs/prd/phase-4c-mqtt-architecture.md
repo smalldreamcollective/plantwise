@@ -7,7 +7,7 @@ Planned
 Replace the single-device HTTP POST model with a Mosquitto MQTT broker + subscriber architecture that supports multiple heterogeneous microcontrollers, remote control commands, and real-time updates — designed for a Sonos-style multi-room/multi-sensor deployment.
 
 ## Background
-Multiple MCU types are in use: BeagleBone Black, Raspberry Pi Zero W, and IEIK (ESP32-based). MQTT's pub/sub model means adding a new device — regardless of type — requires zero server config changes. Each device just publishes to its topic with a consistent payload. Remote control (trigger a reading, future: actuate a pump) is handled by the server publishing to command topics. The broker is the only central coordination point.
+Multiple MCU types are in use: BeagleBone Black, Raspberry Pi Zero W, and IEIK (ESP32-based). MQTT's pub/sub model means adding a new device — regardless of type — requires zero server config changes. Each device just publishes to its topic with a consistent payload. Remote control (trigger a reading; pump actuation in Phase 5) is handled by the server publishing to command topics. The broker is the only central coordination point.
 
 ```
 BeagleBone Black (living room)  ──┐
@@ -160,7 +160,7 @@ MQTT_NOTIFY=false
 ## Out of scope for this phase
 - HTTP API (moved to Phase 4D alongside web UI)
 - MQTT over WebSocket (Phase 4D)
-- Pump/actuator control (future)
+- Pump/actuator control (Phase 5 — see `phase-5-pump-actuation.md`)
 - TLS setup (documented but not implemented)
 
 ## Success criteria
