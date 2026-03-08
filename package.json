@@ -29,7 +29,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "start-work": "bash scripts/start-work.sh",
+    "issue": "gh issue list",
+    "issue:new": "gh issue create",
+    "issue:view": "gh issue view"
   },
   "lint-staged": {
     "*.ts": [
