@@ -152,6 +152,27 @@ npm run diagnose -- ./photo.jpg --plant 1
 
 Requires API keys. Results are saved to the database automatically.
 
+### `sensor` — Manage soil moisture readings *(direct)*
+
+```bash
+# Log a manual reading (0–100)
+npm run sensor -- read 1 45
+
+# Generate an emulated dryout curve (7 days by default)
+npm run sensor -- simulate 1
+npm run sensor -- simulate 1 --days 14
+
+# Show latest moisture for all plants
+npm run sensor -- status
+
+# Show latest moisture for a specific plant
+npm run sensor -- status 1
+
+# Show full reading history for a plant (20 most recent by default)
+npm run sensor -- history 1
+npm run sensor -- history 1 --limit 50
+```
+
 ### `serve` — Start the MQTT subscriber *(direct)*
 
 ```bash
