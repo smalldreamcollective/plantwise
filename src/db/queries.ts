@@ -7,6 +7,7 @@ export interface Plant {
   notes: string | null;
   watering_interval_days: number;
   moisture_threshold_pct: number;
+  moisture_upper_threshold_pct: number;
   created_at: string;
 }
 
@@ -47,19 +48,21 @@ export function insertPlant(
   species?: string,
   notes?: string,
   wateringIntervalDays?: number,
-  moistureThresholdPct?: number
+  moistureThresholdPct?: number,
+  moistureUpperThresholdPct?: number
 ): Plant {
   const db = getDb();
   const stmt = db.prepare(
-    `INSERT INTO plants (name, species, notes, watering_interval_days, moisture_threshold_pct)
-     VALUES (?, ?, ?, ?, ?) RETURNING *`
+    `INSERT INTO plants (name, species, notes, watering_interval_days, moisture_threshold_pct, moisture_upper_threshold_pct)
+     VALUES (?, ?, ?, ?, ?, ?) RETURNING *`
   );
   return stmt.get(
     name,
     species ?? null,
     notes ?? null,
     wateringIntervalDays ?? 7,
-    moistureThresholdPct ?? 30
+    moistureThresholdPct ?? 30,
+    moistureUpperThresholdPct ?? 85
   ) as Plant;
 }
 
@@ -79,6 +82,7 @@ export interface PlantUpdates {
   notes?: string;
   watering_interval_days?: number;
   moisture_threshold_pct?: number;
+  moisture_upper_threshold_pct?: number;
 }
 
 export function updatePlant(id: number, updates: PlantUpdates): Plant | undefined {
@@ -209,6 +213,28 @@ export function getPlantsOverdueForWatering(): PlantWithWatering[] {
         (julianday('now') - julianday(wl.last_watered_at)) DESC`
     )
     .all() as PlantWithWatering[];
+}
+
+export function getPlantsOverwatered(): Plant[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT p.*
+       FROM plants p
+       INNER JOIN (
+         SELECT sr.plant_id, sr.moisture_pct
+         FROM sensor_readings sr
+         INNER JOIN (
+           SELECT plant_id, MAX(recorded_at) AS latest
+           FROM sensor_readings
+           GROUP BY plant_id
+         ) latest_sr ON sr.plant_id = latest_sr.plant_id AND sr.recorded_at = latest_sr.latest
+         WHERE (julianday('now') - julianday(latest_sr.latest)) <= 1
+       ) recent ON p.id = recent.plant_id
+       WHERE recent.moisture_pct > p.moisture_upper_threshold_pct
+       ORDER BY recent.moisture_pct DESC`
+    )
+    .all() as Plant[];
 }
 
 // ── Sensor readings ───────────────────────────────────────────────────────────

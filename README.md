@@ -65,10 +65,10 @@ Commands marked **direct** work without API keys. Commands marked **AI** require
 npm run add -- "Monstera"
 npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
 npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
-npm run add -- "Cactus" --interval 21 --threshold 15
+npm run add -- "Cactus" --interval 21 --threshold 15 --upper-threshold 80
 ```
 
-Defaults: watering interval 7 days, moisture threshold 30%. Override with `--interval` and `--threshold` at creation, or change later with `update`.
+Defaults: watering interval 7 days, low moisture threshold 30%, overwatering threshold 85%. Override with `--interval`, `--threshold`, and `--upper-threshold` at creation, or change later with `update`.
 
 ### `update` — Update a plant's details *(direct)*
 
@@ -76,6 +76,7 @@ Defaults: watering interval 7 days, moisture threshold 30%. Override with `--int
 npm run update -- 1 --name "Monstera Deliciosa"
 npm run update -- 1 --species "Monstera deliciosa"
 npm run update -- 1 --interval 10 --threshold 25
+npm run update -- 1 --upper-threshold 80
 npm run update -- 1 --notes "Moved to south window"
 ```
 
