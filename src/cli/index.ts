@@ -8,6 +8,7 @@ import { notify } from '../utils/notify';
 import { startSubscriber } from '../mqtt/subscriber';
 import {
   getAllPlantsWithLatestReading,
+  getAllPlantsWithMoistureStats,
   getHealthChecksForPlant,
   getLatestSensorReading,
   getPlant,
@@ -624,6 +625,38 @@ sensorCmd
     }
   });
 
+sensorCmd
+  .command('avg')
+  .description('Show average, min, and max moisture for all plants')
+  .action(() => {
+    try {
+      const plants = getAllPlantsWithMoistureStats();
+      if (plants.length === 0) {
+        console.log('No plants in your collection yet.');
+        return;
+      }
+      console.log('\nMoisture averages:\n');
+      for (const p of plants) {
+        if (p.reading_count === 0) {
+          console.log(`  [${p.id}] ${p.name.padEnd(18)} —  no readings yet`);
+        } else {
+          const avg = String(p.avg_moisture ?? '—').padStart(3);
+          const min = String(p.min_moisture ?? '—').padStart(3);
+          const max = String(p.max_moisture ?? '—').padStart(3);
+          const bar = moistureBar(p.avg_moisture ?? 0);
+          const count = `${p.reading_count} readings`;
+          console.log(
+            `  [${p.id}] ${p.name.padEnd(18)} avg ${avg}%  ${bar}  min ${min}%  max ${max}%  (${count})`
+          );
+        }
+      }
+      console.log();
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 const helpText: Record<string, string> = {
   add: `
   add <name> [options]
@@ -721,6 +754,7 @@ const helpText: Record<string, string> = {
       simulate <id>          Generate an emulated dryout curve
       status [id]            Show latest moisture for one or all plants
       history <id>           Show full reading history for a plant
+      avg                    Show avg, min, max moisture for all plants
 
     Options (read):
       --source <source>   Reading source: manual | emulated | hardware (default: manual)
@@ -740,6 +774,7 @@ const helpText: Record<string, string> = {
       npm run sensor -- status 1
       npm run sensor -- history 1
       npm run sensor -- history 1 --limit 50
+      npm run sensor -- avg
 `,
   update: `
   update <id> [options]
