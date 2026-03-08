@@ -8,14 +8,17 @@ import {
   getHealthChecksForPlant,
   getLastCareEvent,
   getLatestSensorReading,
+  getPlant,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
+  getSensorReadings,
   insertHealthCheck,
   insertPlant,
   listPlants,
   logCareEvent,
   logSensorReading,
   removePlant,
+  updatePlant,
 } from './queries';
 
 describe('DB queries', () => {
@@ -322,6 +325,132 @@ describe('DB queries', () => {
       insertPlant('Orchid'); // never watered, no readings
       const overdue = getPlantsOverdueForWatering();
       expect(overdue.some((p) => p.name === 'Orchid')).toBe(true);
+    });
+  });
+
+  describe('getPlant', () => {
+    it('returns the plant by id', () => {
+      const plant = insertPlant('Aloe');
+      const found = getPlant(plant.id);
+      expect(found).toBeDefined();
+      expect(found?.name).toBe('Aloe');
+    });
+
+    it('returns undefined for a non-existent id', () => {
+      expect(getPlant(99999)).toBeUndefined();
+    });
+  });
+
+  describe('insertPlant with custom interval and threshold', () => {
+    it('stores custom watering_interval_days', () => {
+      const plant = insertPlant('Cactus', undefined, undefined, 21);
+      expect(plant.watering_interval_days).toBe(21);
+    });
+
+    it('stores custom moisture_threshold_pct', () => {
+      const plant = insertPlant('Cactus', undefined, undefined, undefined, 15);
+      expect(plant.moisture_threshold_pct).toBe(15);
+    });
+
+    it('stores both custom interval and threshold together', () => {
+      const plant = insertPlant('Succulent', undefined, undefined, 14, 20);
+      expect(plant.watering_interval_days).toBe(14);
+      expect(plant.moisture_threshold_pct).toBe(20);
+    });
+
+    it('defaults to 7 days and 30% when not provided', () => {
+      const plant = insertPlant('Fern');
+      expect(plant.watering_interval_days).toBe(7);
+      expect(plant.moisture_threshold_pct).toBe(30);
+    });
+  });
+
+  describe('updatePlant', () => {
+    it('updates the name', () => {
+      const plant = insertPlant('Old Name');
+      const updated = updatePlant(plant.id, { name: 'New Name' });
+      expect(updated?.name).toBe('New Name');
+    });
+
+    it('updates species', () => {
+      const plant = insertPlant('Fern');
+      const updated = updatePlant(plant.id, { species: 'Nephrolepis exaltata' });
+      expect(updated?.species).toBe('Nephrolepis exaltata');
+    });
+
+    it('updates notes', () => {
+      const plant = insertPlant('Basil');
+      const updated = updatePlant(plant.id, { notes: 'South window' });
+      expect(updated?.notes).toBe('South window');
+    });
+
+    it('updates watering_interval_days', () => {
+      const plant = insertPlant('Cactus');
+      const updated = updatePlant(plant.id, { watering_interval_days: 21 });
+      expect(updated?.watering_interval_days).toBe(21);
+    });
+
+    it('updates moisture_threshold_pct', () => {
+      const plant = insertPlant('Succulent');
+      const updated = updatePlant(plant.id, { moisture_threshold_pct: 15 });
+      expect(updated?.moisture_threshold_pct).toBe(15);
+    });
+
+    it('updates multiple fields at once', () => {
+      const plant = insertPlant('Orchid');
+      const updated = updatePlant(plant.id, {
+        name: 'Phalaenopsis',
+        watering_interval_days: 10,
+        moisture_threshold_pct: 40,
+      });
+      expect(updated?.name).toBe('Phalaenopsis');
+      expect(updated?.watering_interval_days).toBe(10);
+      expect(updated?.moisture_threshold_pct).toBe(40);
+    });
+
+    it('returns the existing plant when no fields are provided', () => {
+      const plant = insertPlant('Rose');
+      const result = updatePlant(plant.id, {});
+      expect(result?.name).toBe('Rose');
+    });
+
+    it('returns undefined for a non-existent plant', () => {
+      const result = updatePlant(99999, { name: 'Ghost' });
+      expect(result).toBeUndefined();
+    });
+
+    it('does not modify unrelated fields', () => {
+      const plant = insertPlant('Mint', 'Mentha', 'Kitchen shelf');
+      updatePlant(plant.id, { name: 'Peppermint' });
+      const refetched = getPlant(plant.id);
+      expect(refetched?.species).toBe('Mentha');
+      expect(refetched?.notes).toBe('Kitchen shelf');
+    });
+  });
+
+  describe('getSensorReadings', () => {
+    it('returns an empty array when no readings exist', () => {
+      const plant = insertPlant('Cactus');
+      expect(getSensorReadings(plant.id)).toEqual([]);
+    });
+
+    it('returns readings in descending order', () => {
+      const plant = insertPlant('Fern');
+      logSensorReading(plant.id, 80);
+      getDb()
+        .prepare(
+          "INSERT INTO sensor_readings (plant_id, moisture_pct, source, recorded_at) VALUES (?, 40, 'manual', datetime('now', '+1 hour'))"
+        )
+        .run(plant.id);
+      const readings = getSensorReadings(plant.id);
+      expect(readings[0]?.moisture_pct).toBe(40);
+      expect(readings[1]?.moisture_pct).toBe(80);
+    });
+
+    it('respects the limit parameter', () => {
+      const plant = insertPlant('Basil');
+      for (let i = 0; i < 5; i++) logSensorReading(plant.id, 50);
+      expect(getSensorReadings(plant.id, 3)).toHaveLength(3);
     });
   });
 });
