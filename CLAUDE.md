@@ -34,9 +34,10 @@ Never read .env files.
 - Run `npm test` before opening a PR
 - **Always update README.md and the `help-guide` command in `src/cli/index.ts`** whenever commands are added, changed, or removed
 - **Every feature must have a PRD in `docs/prd/`** — create or update the relevant file before writing code. Naming: `phase-Nx-short-description.md`
+- **Every new feature or query function must include tests.** Add or update the relevant `*.test.ts` file alongside the code change. Coverage targets: 80% lines/functions/statements, 70% branches (enforced by `npm run test:coverage`). Exceptions: `src/agent/` (LangGraph — requires live API) and `src/cli/` (Commander.js wiring — business logic is covered by query tests).
 
 ## Current phase
-Phase 3C complete — care_events table + log subcommand group (water/feed/repot). See `docs/prd/` for all phase PRDs.
+Phase 4C complete — MQTT subscriber + BeagleBone Black publisher + Docker Compose broker. See `docs/prd/` for all phase PRDs.
 
 ## Known issues / decisions pending
 - Multi-user / hosted is a future goal. When that phase begins: add `user_id` to all tables, switch to UUID primary keys, introduce an API layer, evaluate Supabase or MongoDB Atlas as the backend.
