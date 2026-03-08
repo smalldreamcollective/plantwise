@@ -1,7 +1,7 @@
 # PRD — Phase 4C: MQTT Architecture
 
 ## Status
-Planned
+Complete
 
 ## Goal
 Replace the single-device HTTP POST model with a Mosquitto MQTT broker + subscriber architecture that supports multiple heterogeneous microcontrollers, remote control commands, and real-time updates — designed for a Sonos-style multi-room/multi-sensor deployment.
