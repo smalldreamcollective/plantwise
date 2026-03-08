@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Auto-append "Closes #<n>" based on branch name (e.g. feat/42-my-feature)
+
+COMMIT_MSG_FILE="$1"
+MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Extract issue number from branch name (first integer after the slash)
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+ISSUE=$(echo "$BRANCH" | grep -oE '/([0-9]+)-' | grep -oE '[0-9]+' | head -1)
+
+# Skip if no issue number found, or if the message already references it
+if [ -z "$ISSUE" ]; then exit 0; fi
+if echo "$MSG" | grep -qiE "(closes|fixes|resolves) #${ISSUE}"; then exit 0; fi
+# Skip merge commits
+if echo "$MSG" | grep -q "^Merge "; then exit 0; fi
+
+printf "\nCloses #%s\n" "$ISSUE" >> "$COMMIT_MSG_FILE"

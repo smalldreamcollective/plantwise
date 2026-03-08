@@ -27,14 +27,24 @@ Never read .env files.
 - Claude is used for final response generation, not raw Plant.id output
 
 ## Workflow
-- **Always create a new branch before making changes** — never commit directly to `main`
-- Branch from `main` using `feat/`, `fix/`, or `chore/` prefixes (e.g. `feat/add-watering-reminders`)
+- **Every feature starts with a GitHub issue.** Create one with `npm run issue:new` before writing any code.
+- **Use `npm run start-work -- <issue-number>` to begin work.** This pulls latest main, creates a branch named `<prefix>/<issue-number>-<slug>` (prefix inferred from labels: bug→fix, documentation→docs, else feat), pushes it, and opens a draft PR linked to the issue.
+- Branch naming follows `feat/42-short-description` — the issue number is part of the branch name.
+- A `commit-msg` hook automatically appends `Closes #<n>` to every commit based on the branch name, so issues close when the PR merges.
 - Use Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`
 - Pre-commit hook runs lint-staged automatically — do not skip with `--no-verify`
 - Run `npm test` before opening a PR
 - **Always update README.md and the `help-guide` command in `src/cli/index.ts`** whenever commands are added, changed, or removed
 - **Every feature must have a PRD in `docs/prd/`** — create or update the relevant file before writing code. Naming: `phase-Nx-short-description.md`
 - **Every new feature or query function must include tests.** Add or update the relevant `*.test.ts` file alongside the code change. Coverage targets: 80% lines/functions/statements, 70% branches (enforced by `npm run test:coverage`). Exceptions: `src/agent/` (LangGraph — requires live API) and `src/cli/` (Commander.js wiring — business logic is covered by query tests).
+
+### Quick reference
+```bash
+npm run issue              # list open issues
+npm run issue:new          # create a new issue
+npm run issue:view -- 42   # view issue #42
+npm run start-work -- 42   # branch + draft PR for issue #42
+```
 
 ## Current phase
 Phase 4C complete — MQTT subscriber + BeagleBone Black publisher + Docker Compose broker. See `docs/prd/` for all phase PRDs.
