@@ -11,6 +11,7 @@ import {
   getHealthChecksForPlant,
   getLatestSensorReading,
   getPlant,
+  getSensorReadings,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertPlant,
@@ -576,6 +577,53 @@ sensorCmd
     }
   });
 
+sensorCmd
+  .command('history <id>')
+  .description('Show moisture reading history for a plant')
+  .option('-n, --limit <n>', 'Number of readings to show (default: 20)', '20')
+  .action((id: string, options: { limit: string }) => {
+    const plantId = parseInt(id, 10);
+    const limit = parseInt(options.limit, 10);
+    if (isNaN(plantId)) {
+      console.error('Error: plant ID must be a number');
+      process.exit(1);
+    }
+    if (isNaN(limit) || limit < 1) {
+      console.error('Error: --limit must be a positive number');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+      const readings = getSensorReadings(plantId, limit);
+      if (readings.length === 0) {
+        console.log(`${plant.name} [ID: ${plant.id}] — no sensor readings yet`);
+        return;
+      }
+      console.log(
+        `\nMoisture history for ${plant.name} [ID: ${plant.id}] (last ${readings.length}):\n`
+      );
+      for (const r of readings) {
+        const status =
+          r.moisture_pct > plant.moisture_upper_threshold_pct
+            ? 'too wet   '
+            : r.moisture_pct < plant.moisture_threshold_pct
+              ? 'needs water'
+              : 'OK         ';
+        console.log(
+          `  ${r.recorded_at}  ${String(r.moisture_pct).padStart(3)}%  ${moistureBar(r.moisture_pct)}  ${status}  [${r.source}]`
+        );
+      }
+      console.log();
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 const helpText: Record<string, string> = {
   add: `
   add <name> [options]
@@ -672,12 +720,16 @@ const helpText: Record<string, string> = {
       read <id> <moisture>   Log a moisture reading (0–100) for a plant
       simulate <id>          Generate an emulated dryout curve
       status [id]            Show latest moisture for one or all plants
+      history <id>           Show full reading history for a plant
 
     Options (read):
       --source <source>   Reading source: manual | emulated | hardware (default: manual)
 
     Options (simulate):
       --days <n>          Number of days to simulate (default: 7)
+
+    Options (history):
+      -n, --limit <n>     Number of readings to show (default: 20)
 
     Examples:
       npm run sensor -- read 1 45
@@ -686,6 +738,8 @@ const helpText: Record<string, string> = {
       npm run sensor -- simulate 1 --days 14
       npm run sensor -- status
       npm run sensor -- status 1
+      npm run sensor -- history 1
+      npm run sensor -- history 1 --limit 50
 `,
   update: `
   update <id> [options]
