@@ -28,6 +28,13 @@ cp .env.example .env
 ANTHROPIC_API_KEY=your_anthropic_key_here
 PLANTID_API_KEY=your_plantid_key_here
 DB_PATH=./plantwise.db
+
+# MQTT (required for `npm run serve`)
+MQTT_HOST=localhost
+MQTT_PORT=1883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_NOTIFY=false
 ```
 
 ## Commands
@@ -129,6 +136,26 @@ npm run diagnose -- ./photo.jpg --plant 1
 ```
 
 Requires API keys. Results are saved to the database automatically.
+
+### `serve` — Start the MQTT subscriber *(direct)*
+
+```bash
+npm run serve
+```
+
+Connects to the Mosquitto broker and listens for soil moisture readings published by hardware sensors. Readings are stored in `sensor_readings` automatically. Set `MQTT_NOTIFY=true` in `.env` to fire a desktop notification when moisture drops below a plant's threshold.
+
+**Broker setup:**
+```bash
+docker compose up -d
+```
+
+This starts a Mosquitto broker on port 1883 using the config in [`mosquitto/mosquitto.conf`](mosquitto/mosquitto.conf). To stop it: `docker compose down`.
+
+**Hardware setup:** See [`hardware/beaglebone/moisture_publisher.py`](hardware/beaglebone/moisture_publisher.py) for the BeagleBone Black publisher script. Set `BROKER_HOST` to your Mac's LAN IP and run it via cron every 15 minutes:
+```bash
+*/15 * * * * python3 /path/to/moisture_publisher.py >> /tmp/plantwise-sensor.log 2>&1
+```
 
 ## Development
 

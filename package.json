@@ -19,6 +19,7 @@
     "status": "tsx src/cli/index.ts status",
     "identify": "tsx src/cli/index.ts identify",
     "diagnose": "tsx src/cli/index.ts diagnose",
+    "serve": "tsx src/cli/index.ts serve",
     "help": "tsx src/cli/index.ts help-guide",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
@@ -44,6 +45,7 @@
     "better-sqlite3": "^11.7.0",
     "commander": "^13.0.0",
     "dotenv": "^16.4.7",
+    "mqtt": "^5.15.0",
     "sharp": "^0.33.5",
     "zod": "^4.2.0"
   },

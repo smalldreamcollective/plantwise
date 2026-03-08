@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { runAgent } from '../agent/graph';
 import { getDb } from '../db/schema';
 import { notify } from '../utils/notify';
+import { startSubscriber } from '../mqtt/subscriber';
 import {
   getAllPlantsWithLatestReading,
   getHealthChecksForPlant,
@@ -538,6 +539,26 @@ const helpText: Record<string, string> = {
       npm run sensor -- status
       npm run sensor -- status 1
 `,
+  serve: `
+  serve
+    Start the MQTT subscriber. Connects to the Mosquitto broker and listens for
+    soil moisture readings published by hardware sensors (BeagleBone, Pi, ESP32).
+    Readings are stored in the database. Set MQTT_NOTIFY=true in .env to fire a
+    desktop notification when moisture drops below a plant's threshold.
+
+    Environment variables (set in .env):
+      MQTT_HOST       Broker hostname or IP (default: localhost)
+      MQTT_PORT       Broker port (default: 1883)
+      MQTT_USERNAME   Broker username (optional)
+      MQTT_PASSWORD   Broker password (optional)
+      MQTT_NOTIFY     Fire notifications on low moisture: true | false
+
+    Examples:
+      npm run serve
+
+    Broker setup:
+      docker compose up -d
+`,
   help: `
   help [command]
     Show help for all commands, or detailed help for a specific command.
@@ -572,6 +593,7 @@ COMMANDS
   add       Add a plant to your collection
   log       Log a care event (water / feed / repot)
   sensor    Manage soil moisture sensor readings
+  serve     Start the MQTT subscriber (listen for hardware sensor readings)
   remind    List plants overdue for watering
   remove    Remove a plant from your collection
   status    List your collection or view a plant's health history
@@ -584,12 +606,20 @@ Run "npm run help -- <command>" for usage examples.
   npm run help -- add
   npm run help -- log
   npm run help -- sensor
+  npm run help -- serve
   npm run help -- remind
   npm run help -- remove
   npm run help -- status
   npm run help -- identify
   npm run help -- diagnose
 `);
+  });
+
+program
+  .command('serve')
+  .description('Start the MQTT subscriber — listens for sensor readings and stores them')
+  .action(() => {
+    startSubscriber();
   });
 
 program.parse(process.argv);
