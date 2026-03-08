@@ -56,13 +56,20 @@ export function handleMessage(topic: string, message: Buffer): void {
   }
 
   logSensorReading(plantId, moisturePct, 'hardware');
-  const status = moisturePct < plant.moisture_threshold_pct ? 'needs water' : 'OK';
+
+  const tooWet = moisturePct > plant.moisture_upper_threshold_pct;
+  const tooDry = moisturePct < plant.moisture_threshold_pct;
+  const status = tooWet ? 'too wet' : tooDry ? 'needs water' : 'OK';
   console.log(
-    `[mqtt] ${plant.name} [ID: ${plant.id}] — ${moisturePct}% (threshold: ${plant.moisture_threshold_pct}%) — ${status}`
+    `[mqtt] ${plant.name} [ID: ${plant.id}] — ${moisturePct}% (low: ${plant.moisture_threshold_pct}% / high: ${plant.moisture_upper_threshold_pct}%) — ${status}`
   );
 
-  if (process.env['MQTT_NOTIFY'] === 'true' && moisturePct < plant.moisture_threshold_pct) {
-    notify(`${plant.name} needs water — soil moisture ${moisturePct}%`);
+  if (process.env['MQTT_NOTIFY'] === 'true') {
+    if (tooDry) {
+      notify(`${plant.name} needs water — soil moisture ${moisturePct}%`);
+    } else if (tooWet) {
+      notify(`${plant.name} is overwatered — soil moisture ${moisturePct}%`);
+    }
   }
 }
 

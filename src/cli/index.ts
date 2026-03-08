@@ -46,10 +46,17 @@ program
   .option('-n, --notes <notes>', 'Additional notes about the plant')
   .option('--interval <days>', 'Watering interval in days (default: 7)', parseInt)
   .option('--threshold <pct>', 'Moisture alert threshold 0–100% (default: 30)', parseInt)
+  .option('--upper-threshold <pct>', 'Overwatering alert threshold 0–100% (default: 85)', parseInt)
   .action(
     (
       name: string,
-      options: { species?: string; notes?: string; interval?: number; threshold?: number }
+      options: {
+        species?: string;
+        notes?: string;
+        interval?: number;
+        threshold?: number;
+        upperThreshold?: number;
+      }
     ) => {
       if (options.interval !== undefined && (isNaN(options.interval) || options.interval < 1)) {
         console.error('Error: --interval must be a positive number');
@@ -62,19 +69,29 @@ program
         console.error('Error: --threshold must be between 0 and 100');
         process.exit(1);
       }
+      if (
+        options.upperThreshold !== undefined &&
+        (isNaN(options.upperThreshold) ||
+          options.upperThreshold < 0 ||
+          options.upperThreshold > 100)
+      ) {
+        console.error('Error: --upper-threshold must be between 0 and 100');
+        process.exit(1);
+      }
       try {
         const plant = insertPlant(
           name,
           options.species,
           options.notes,
           options.interval,
-          options.threshold
+          options.threshold,
+          options.upperThreshold
         );
         console.log(
           `Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`
         );
         console.log(
-          `  Watering interval: every ${plant.watering_interval_days} days | Moisture threshold: ${plant.moisture_threshold_pct}%`
+          `  Watering interval: every ${plant.watering_interval_days} days | Moisture: ${plant.moisture_threshold_pct}%–${plant.moisture_upper_threshold_pct}%`
         );
       } catch (err) {
         console.error('Error:', err instanceof Error ? err.message : err);
@@ -91,6 +108,7 @@ program
   .option('--notes <notes>', 'Additional notes')
   .option('--interval <days>', 'Watering interval in days', parseInt)
   .option('--threshold <pct>', 'Moisture threshold percentage (0–100)', parseInt)
+  .option('--upper-threshold <pct>', 'Overwatering threshold percentage (0–100)', parseInt)
   .action(
     (
       id: string,
@@ -100,6 +118,7 @@ program
         notes?: string;
         interval?: number;
         threshold?: number;
+        upperThreshold?: number;
       }
     ) => {
       const plantId = parseInt(id, 10);
@@ -131,9 +150,20 @@ program
           }
           updates['moisture_threshold_pct'] = options.threshold;
         }
+        if (options.upperThreshold !== undefined) {
+          if (
+            isNaN(options.upperThreshold) ||
+            options.upperThreshold < 0 ||
+            options.upperThreshold > 100
+          ) {
+            console.error('Error: --upper-threshold must be between 0 and 100');
+            process.exit(1);
+          }
+          updates['moisture_upper_threshold_pct'] = options.upperThreshold;
+        }
         if (Object.keys(updates).length === 0) {
           console.log(
-            'Nothing to update. Use --name, --species, --notes, --interval, or --threshold.'
+            'Nothing to update. Use --name, --species, --notes, --interval, --threshold, or --upper-threshold.'
           );
           return;
         }
@@ -404,9 +434,14 @@ sensorCmd
         process.exit(1);
       }
       logSensorReading(plantId, moisturePct, options.source);
-      const status = moisturePct < plant.moisture_threshold_pct ? 'needs water' : 'OK';
+      const status =
+        moisturePct > plant.moisture_upper_threshold_pct
+          ? 'too wet'
+          : moisturePct < plant.moisture_threshold_pct
+            ? 'needs water'
+            : 'OK';
       console.log(
-        `Moisture recorded for ${plant.name} [ID: ${plant.id}]: ${moisturePct}% (threshold: ${plant.moisture_threshold_pct}%) — ${status}`
+        `Moisture recorded for ${plant.name} [ID: ${plant.id}]: ${moisturePct}% (low: ${plant.moisture_threshold_pct}% / high: ${plant.moisture_upper_threshold_pct}%) — ${status}`
       );
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
@@ -462,12 +497,17 @@ sensorCmd
 
       const latest = getLatestSensorReading(plantId);
       const currentMoisture = latest?.moisture_pct ?? 0;
-      const status = currentMoisture < plant.moisture_threshold_pct ? 'needs water' : 'OK';
+      const status =
+        currentMoisture > plant.moisture_upper_threshold_pct
+          ? 'too wet'
+          : currentMoisture < plant.moisture_threshold_pct
+            ? 'needs water'
+            : 'OK';
       console.log(
         `Simulated ${count} readings for ${plant.name} [ID: ${plant.id}] over ${days} day${days === 1 ? '' : 's'}`
       );
       console.log(
-        `Current simulated moisture: ${currentMoisture}% (threshold: ${plant.moisture_threshold_pct}%) — ${status}`
+        `Current simulated moisture: ${currentMoisture}% (low: ${plant.moisture_threshold_pct}% / high: ${plant.moisture_upper_threshold_pct}%) — ${status}`
       );
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
@@ -496,7 +536,12 @@ sensorCmd
           console.log(`${plant.name} [ID: ${plant.id}] — no sensor readings yet`);
           return;
         }
-        const status = reading.moisture_pct < plant.moisture_threshold_pct ? 'Needs water' : 'OK';
+        const status =
+          reading.moisture_pct > plant.moisture_upper_threshold_pct
+            ? 'Too wet   '
+            : reading.moisture_pct < plant.moisture_threshold_pct
+              ? 'Needs water'
+              : 'OK         ';
         console.log(
           `${plant.name} [ID: ${plant.id}]  ${reading.moisture_pct}%  ${moistureBar(reading.moisture_pct)}  ${status}  (${formatRecordedAgo(reading.recorded_at)})`
         );
@@ -512,7 +557,11 @@ sensorCmd
             console.log(`  [${p.id}] ${p.name.padEnd(18)} —    no readings yet`);
           } else {
             const status =
-              p.moisture_pct < p.moisture_threshold_pct ? 'Needs water' : 'OK         ';
+              p.moisture_pct > p.moisture_upper_threshold_pct
+                ? 'Too wet    '
+                : p.moisture_pct < p.moisture_threshold_pct
+                  ? 'Needs water'
+                  : 'OK         ';
             const ago = formatRecordedAgo(p.recorded_at ?? '');
             console.log(
               `  [${p.id}] ${p.name.padEnd(18)} ${String(p.moisture_pct).padStart(3)}%  ${moistureBar(p.moisture_pct)}  ${status}  (${ago})`
@@ -533,16 +582,17 @@ const helpText: Record<string, string> = {
     Add a plant to your collection.
 
     Options:
-      --species <species>    Scientific species name
-      --notes <notes>        Additional notes
-      --interval <days>      Watering interval in days (default: 7)
-      --threshold <pct>      Moisture alert threshold 0–100% (default: 30)
+      --species <species>          Scientific species name
+      --notes <notes>              Additional notes
+      --interval <days>            Watering interval in days (default: 7)
+      --threshold <pct>            Low moisture alert threshold 0–100% (default: 30)
+      --upper-threshold <pct>      Overwatering alert threshold 0–100% (default: 85)
 
     Examples:
       npm run add -- "Monstera"
       npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
       npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
-      npm run add -- "Cactus" --interval 21 --threshold 15
+      npm run add -- "Cactus" --interval 21 --threshold 15 --upper-threshold 80
 `,
   log: `
   log <subcommand> <id> [options]
@@ -642,16 +692,18 @@ const helpText: Record<string, string> = {
     Update a plant's details. All options are optional — only provided fields are changed.
 
     Options:
-      --name <name>          New display name
-      --species <species>    Scientific species name
-      --notes <notes>        Additional notes
-      --interval <days>      Watering interval in days
-      --threshold <pct>      Moisture alert threshold (0–100%)
+      --name <name>                New display name
+      --species <species>          Scientific species name
+      --notes <notes>              Additional notes
+      --interval <days>            Watering interval in days
+      --threshold <pct>            Low moisture alert threshold (0–100%)
+      --upper-threshold <pct>      Overwatering alert threshold (0–100%)
 
     Examples:
       npm run update -- 1 --name "Monstera Deliciosa"
       npm run update -- 1 --species "Monstera deliciosa"
       npm run update -- 1 --interval 10 --threshold 25
+      npm run update -- 1 --upper-threshold 80
       npm run update -- 1 --notes "Moved to south window"
 `,
   serve: `
@@ -666,7 +718,7 @@ const helpText: Record<string, string> = {
       MQTT_PORT       Broker port (default: 1883)
       MQTT_USERNAME   Broker username (optional)
       MQTT_PASSWORD   Broker password (optional)
-      MQTT_NOTIFY     Fire notifications on low moisture: true | false
+      MQTT_NOTIFY     Fire notifications on low or high moisture: true | false
 
     Examples:
       npm run serve

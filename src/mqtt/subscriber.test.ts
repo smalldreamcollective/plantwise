@@ -19,6 +19,7 @@ const mockPlant = {
   notes: null,
   watering_interval_days: 7,
   moisture_threshold_pct: 30,
+  moisture_upper_threshold_pct: 85,
   created_at: '2026-01-01 00:00:00',
 };
 
@@ -63,6 +64,25 @@ describe('handleMessage', () => {
     process.env['MQTT_NOTIFY'] = 'true';
     handleMessage(topic, msg({ plant_id: 1, moisture_pct: 55 }));
     expect(queries.logSensorReading).toHaveBeenCalled();
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+  });
+
+  it('fires overwatering notification when above upper threshold and MQTT_NOTIFY=true', () => {
+    process.env['MQTT_NOTIFY'] = 'true';
+    handleMessage(topic, msg({ plant_id: 1, moisture_pct: 90 }));
+    expect(queries.logSensorReading).toHaveBeenCalledWith(1, 90, 'hardware');
+    expect(notifyModule.notify).toHaveBeenCalledWith('Basil is overwatered — soil moisture 90%');
+  });
+
+  it('does not fire overwatering notification when MQTT_NOTIFY is false', () => {
+    handleMessage(topic, msg({ plant_id: 1, moisture_pct: 90 }));
+    expect(queries.logSensorReading).toHaveBeenCalled();
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+  });
+
+  it('does not fire overwatering notification when moisture is at the upper threshold (not above)', () => {
+    process.env['MQTT_NOTIFY'] = 'true';
+    handleMessage(topic, msg({ plant_id: 1, moisture_pct: 85 }));
     expect(notifyModule.notify).not.toHaveBeenCalled();
   });
 

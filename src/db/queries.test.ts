@@ -11,6 +11,7 @@ import {
   getPlant,
   getPlantWithWatering,
   getPlantsOverdueForWatering,
+  getPlantsOverwatered,
   getSensorReadings,
   insertHealthCheck,
   insertPlant,
@@ -363,6 +364,16 @@ describe('DB queries', () => {
       expect(plant.watering_interval_days).toBe(7);
       expect(plant.moisture_threshold_pct).toBe(30);
     });
+
+    it('stores custom moisture_upper_threshold_pct', () => {
+      const plant = insertPlant('Fern', undefined, undefined, undefined, undefined, 75);
+      expect(plant.moisture_upper_threshold_pct).toBe(75);
+    });
+
+    it('defaults moisture_upper_threshold_pct to 85', () => {
+      const plant = insertPlant('Cactus');
+      expect(plant.moisture_upper_threshold_pct).toBe(85);
+    });
   });
 
   describe('updatePlant', () => {
@@ -394,6 +405,12 @@ describe('DB queries', () => {
       const plant = insertPlant('Succulent');
       const updated = updatePlant(plant.id, { moisture_threshold_pct: 15 });
       expect(updated?.moisture_threshold_pct).toBe(15);
+    });
+
+    it('updates moisture_upper_threshold_pct', () => {
+      const plant = insertPlant('Succulent');
+      const updated = updatePlant(plant.id, { moisture_upper_threshold_pct: 75 });
+      expect(updated?.moisture_upper_threshold_pct).toBe(75);
     });
 
     it('updates multiple fields at once', () => {
@@ -451,6 +468,33 @@ describe('DB queries', () => {
       const plant = insertPlant('Basil');
       for (let i = 0; i < 5; i++) logSensorReading(plant.id, 50);
       expect(getSensorReadings(plant.id, 3)).toHaveLength(3);
+    });
+  });
+
+  describe('getPlantsOverwatered', () => {
+    it('returns empty array when no plants have readings', () => {
+      insertPlant('Cactus');
+      expect(getPlantsOverwatered()).toEqual([]);
+    });
+
+    it('returns a plant whose latest reading exceeds the upper threshold', () => {
+      const plant = insertPlant('Fern', undefined, undefined, undefined, 30, 85);
+      logSensorReading(plant.id, 90); // above 85%
+      const overwatered = getPlantsOverwatered();
+      expect(overwatered.some((p) => p.id === plant.id)).toBe(true);
+    });
+
+    it('excludes a plant whose latest reading is at or below the upper threshold', () => {
+      const plant = insertPlant('Succulent', undefined, undefined, undefined, 30, 85);
+      logSensorReading(plant.id, 85); // at threshold, not above
+      const overwatered = getPlantsOverwatered();
+      expect(overwatered.some((p) => p.id === plant.id)).toBe(false);
+    });
+
+    it('excludes a plant with no sensor readings', () => {
+      const plant = insertPlant('Orchid');
+      const overwatered = getPlantsOverwatered();
+      expect(overwatered.some((p) => p.id === plant.id)).toBe(false);
     });
   });
 });

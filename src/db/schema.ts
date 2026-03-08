@@ -68,6 +68,13 @@ function initSchema(db: Database.Database): void {
     // Column already exists
   }
 
+  // Migrate existing DBs: add moisture_upper_threshold_pct if not already present
+  try {
+    db.exec('ALTER TABLE plants ADD COLUMN moisture_upper_threshold_pct INTEGER DEFAULT 85');
+  } catch {
+    // Column already exists
+  }
+
   // One-time migration: copy watering_logs → care_events, then drop the old table
   // Silently fails on fresh installs (watering_logs won't exist)
   try {
