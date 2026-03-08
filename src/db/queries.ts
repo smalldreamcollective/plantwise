@@ -42,10 +42,25 @@ export interface PlantWithWatering extends Plant {
 
 // ── Plants ────────────────────────────────────────────────────────────────────
 
-export function insertPlant(name: string, species?: string, notes?: string): Plant {
+export function insertPlant(
+  name: string,
+  species?: string,
+  notes?: string,
+  wateringIntervalDays?: number,
+  moistureThresholdPct?: number
+): Plant {
   const db = getDb();
-  const stmt = db.prepare('INSERT INTO plants (name, species, notes) VALUES (?, ?, ?) RETURNING *');
-  return stmt.get(name, species ?? null, notes ?? null) as Plant;
+  const stmt = db.prepare(
+    `INSERT INTO plants (name, species, notes, watering_interval_days, moisture_threshold_pct)
+     VALUES (?, ?, ?, ?, ?) RETURNING *`
+  );
+  return stmt.get(
+    name,
+    species ?? null,
+    notes ?? null,
+    wateringIntervalDays ?? 7,
+    moistureThresholdPct ?? 30
+  ) as Plant;
 }
 
 export function getPlant(id: number): Plant | undefined {
@@ -56,6 +71,25 @@ export function getPlant(id: number): Plant | undefined {
 export function listPlants(): Plant[] {
   const db = getDb();
   return db.prepare('SELECT * FROM plants ORDER BY created_at DESC').all() as Plant[];
+}
+
+export interface PlantUpdates {
+  name?: string;
+  species?: string;
+  notes?: string;
+  watering_interval_days?: number;
+  moisture_threshold_pct?: number;
+}
+
+export function updatePlant(id: number, updates: PlantUpdates): Plant | undefined {
+  const db = getDb();
+  const fields = Object.keys(updates) as (keyof PlantUpdates)[];
+  if (fields.length === 0) return getPlant(id);
+  const setClauses = fields.map((f) => `${f} = ?`).join(', ');
+  const values = fields.map((f) => updates[f]);
+  return db
+    .prepare(`UPDATE plants SET ${setClauses} WHERE id = ? RETURNING *`)
+    .get(...values, id) as Plant | undefined;
 }
 
 export function removePlant(id: number): boolean {
