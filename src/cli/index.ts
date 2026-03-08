@@ -18,6 +18,7 @@ import {
   logCareEvent,
   logSensorReading,
   removePlant,
+  updatePlant,
 } from '../db/queries';
 
 dotenv.config();
@@ -43,17 +44,111 @@ program
   .description('Add a new plant to your collection')
   .option('-s, --species <species>', 'Scientific species name')
   .option('-n, --notes <notes>', 'Additional notes about the plant')
-  .action((name: string, options: { species?: string; notes?: string }) => {
-    try {
-      const plant = insertPlant(name, options.species, options.notes);
-      console.log(
-        `Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`
-      );
-    } catch (err) {
-      console.error('Error:', err instanceof Error ? err.message : err);
-      process.exit(1);
+  .option('--interval <days>', 'Watering interval in days (default: 7)', parseInt)
+  .option('--threshold <pct>', 'Moisture alert threshold 0–100% (default: 30)', parseInt)
+  .action(
+    (
+      name: string,
+      options: { species?: string; notes?: string; interval?: number; threshold?: number }
+    ) => {
+      if (options.interval !== undefined && (isNaN(options.interval) || options.interval < 1)) {
+        console.error('Error: --interval must be a positive number');
+        process.exit(1);
+      }
+      if (
+        options.threshold !== undefined &&
+        (isNaN(options.threshold) || options.threshold < 0 || options.threshold > 100)
+      ) {
+        console.error('Error: --threshold must be between 0 and 100');
+        process.exit(1);
+      }
+      try {
+        const plant = insertPlant(
+          name,
+          options.species,
+          options.notes,
+          options.interval,
+          options.threshold
+        );
+        console.log(
+          `Added plant: ${plant.name}${plant.species ? ` (${plant.species})` : ''} [ID: ${plant.id}]`
+        );
+        console.log(
+          `  Watering interval: every ${plant.watering_interval_days} days | Moisture threshold: ${plant.moisture_threshold_pct}%`
+        );
+      } catch (err) {
+        console.error('Error:', err instanceof Error ? err.message : err);
+        process.exit(1);
+      }
     }
-  });
+  );
+
+program
+  .command('update <id>')
+  .description('Update a plant in your collection')
+  .option('-n, --name <name>', 'New name')
+  .option('-s, --species <species>', 'Scientific species name')
+  .option('--notes <notes>', 'Additional notes')
+  .option('--interval <days>', 'Watering interval in days', parseInt)
+  .option('--threshold <pct>', 'Moisture threshold percentage (0–100)', parseInt)
+  .action(
+    (
+      id: string,
+      options: {
+        name?: string;
+        species?: string;
+        notes?: string;
+        interval?: number;
+        threshold?: number;
+      }
+    ) => {
+      const plantId = parseInt(id, 10);
+      if (isNaN(plantId)) {
+        console.error('Error: plant ID must be a number');
+        process.exit(1);
+      }
+      try {
+        const plant = getPlant(plantId);
+        if (!plant) {
+          console.error(`Error: No plant found with ID ${plantId}`);
+          process.exit(1);
+        }
+        const updates: Record<string, string | number> = {};
+        if (options.name !== undefined) updates['name'] = options.name;
+        if (options.species !== undefined) updates['species'] = options.species;
+        if (options.notes !== undefined) updates['notes'] = options.notes;
+        if (options.interval !== undefined) {
+          if (isNaN(options.interval) || options.interval < 1) {
+            console.error('Error: --interval must be a positive number');
+            process.exit(1);
+          }
+          updates['watering_interval_days'] = options.interval;
+        }
+        if (options.threshold !== undefined) {
+          if (isNaN(options.threshold) || options.threshold < 0 || options.threshold > 100) {
+            console.error('Error: --threshold must be between 0 and 100');
+            process.exit(1);
+          }
+          updates['moisture_threshold_pct'] = options.threshold;
+        }
+        if (Object.keys(updates).length === 0) {
+          console.log(
+            'Nothing to update. Use --name, --species, --notes, --interval, or --threshold.'
+          );
+          return;
+        }
+        const updated = updatePlant(plantId, updates);
+        if (!updated) {
+          console.error(`Error: No plant found with ID ${plantId}`);
+          process.exit(1);
+        }
+        console.log(`Updated ${updated.name} [ID: ${updated.id}]`);
+      } catch (err) {
+        console.error('Error:', err instanceof Error ? err.message : err);
+        process.exit(1);
+      }
+    }
+  );
 
 const logCmd = program.command('log').description('Log a care event for a plant');
 
@@ -438,13 +533,16 @@ const helpText: Record<string, string> = {
     Add a plant to your collection.
 
     Options:
-      --species <species>   Scientific species name
-      --notes <notes>       Additional notes
+      --species <species>    Scientific species name
+      --notes <notes>        Additional notes
+      --interval <days>      Watering interval in days (default: 7)
+      --threshold <pct>      Moisture alert threshold 0–100% (default: 30)
 
     Examples:
       npm run add -- "Monstera"
       npm run add -- "Snake Plant" --species "Sansevieria trifasciata"
       npm run add -- "Fiddle Leaf Fig" --species "Ficus lyrata" --notes "Near south window"
+      npm run add -- "Cactus" --interval 21 --threshold 15
 `,
   log: `
   log <subcommand> <id> [options]
@@ -539,6 +637,23 @@ const helpText: Record<string, string> = {
       npm run sensor -- status
       npm run sensor -- status 1
 `,
+  update: `
+  update <id> [options]
+    Update a plant's details. All options are optional — only provided fields are changed.
+
+    Options:
+      --name <name>          New display name
+      --species <species>    Scientific species name
+      --notes <notes>        Additional notes
+      --interval <days>      Watering interval in days
+      --threshold <pct>      Moisture alert threshold (0–100%)
+
+    Examples:
+      npm run update -- 1 --name "Monstera Deliciosa"
+      npm run update -- 1 --species "Monstera deliciosa"
+      npm run update -- 1 --interval 10 --threshold 25
+      npm run update -- 1 --notes "Moved to south window"
+`,
   serve: `
   serve
     Start the MQTT subscriber. Connects to the Mosquitto broker and listens for
@@ -591,6 +706,7 @@ PlantWise — AI-powered houseplant care assistant
 COMMANDS
 
   add       Add a plant to your collection
+  update    Update a plant's name, species, notes, or care settings
   log       Log a care event (water / feed / repot)
   sensor    Manage soil moisture sensor readings
   serve     Start the MQTT subscriber (listen for hardware sensor readings)
@@ -604,6 +720,7 @@ COMMANDS
 Run "npm run help -- <command>" for usage examples.
 
   npm run help -- add
+  npm run help -- update
   npm run help -- log
   npm run help -- sensor
   npm run help -- serve
