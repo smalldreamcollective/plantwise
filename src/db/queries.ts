@@ -266,6 +266,38 @@ export function getSensorReadings(plantId: number, limit = 100): SensorReading[]
     .all(plantId, limit) as SensorReading[];
 }
 
+export interface PlantMoistureStats {
+  id: number;
+  name: string;
+  moisture_threshold_pct: number;
+  moisture_upper_threshold_pct: number;
+  avg_moisture: number | null;
+  min_moisture: number | null;
+  max_moisture: number | null;
+  reading_count: number;
+}
+
+export function getAllPlantsWithMoistureStats(): PlantMoistureStats[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT
+        p.id,
+        p.name,
+        p.moisture_threshold_pct,
+        p.moisture_upper_threshold_pct,
+        ROUND(AVG(sr.moisture_pct)) AS avg_moisture,
+        MIN(sr.moisture_pct)        AS min_moisture,
+        MAX(sr.moisture_pct)        AS max_moisture,
+        COUNT(sr.id)                AS reading_count
+       FROM plants p
+       LEFT JOIN sensor_readings sr ON p.id = sr.plant_id
+       GROUP BY p.id
+       ORDER BY p.name ASC`
+    )
+    .all() as PlantMoistureStats[];
+}
+
 export function getAllPlantsWithLatestReading(): (Plant & {
   moisture_pct: number | null;
   recorded_at: string | null;

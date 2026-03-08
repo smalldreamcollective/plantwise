@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from './schema';
 import {
   getAllPlantsWithLatestReading,
+  getAllPlantsWithMoistureStats,
   getHealthChecksForPlant,
   getLastCareEvent,
   getLatestSensorReading,
@@ -468,6 +469,41 @@ describe('DB queries', () => {
       const plant = insertPlant('Basil');
       for (let i = 0; i < 5; i++) logSensorReading(plant.id, 50);
       expect(getSensorReadings(plant.id, 3)).toHaveLength(3);
+    });
+  });
+
+  describe('getAllPlantsWithMoistureStats', () => {
+    it('returns all plants with null stats when no readings exist', () => {
+      insertPlant('Cactus');
+      const stats = getAllPlantsWithMoistureStats();
+      expect(stats).toHaveLength(1);
+      expect(stats[0]?.reading_count).toBe(0);
+      expect(stats[0]?.avg_moisture).toBeNull();
+      expect(stats[0]?.min_moisture).toBeNull();
+      expect(stats[0]?.max_moisture).toBeNull();
+    });
+
+    it('returns correct avg, min, max for a plant with readings', () => {
+      const plant = insertPlant('Basil');
+      logSensorReading(plant.id, 20);
+      logSensorReading(plant.id, 40);
+      logSensorReading(plant.id, 60);
+      const stats = getAllPlantsWithMoistureStats();
+      const row = stats.find((s) => s.id === plant.id);
+      expect(row).toBeDefined();
+      if (!row) return;
+      expect(row.reading_count).toBe(3);
+      expect(row.avg_moisture).toBe(40);
+      expect(row.min_moisture).toBe(20);
+      expect(row.max_moisture).toBe(60);
+    });
+
+    it('includes all plants regardless of whether they have readings', () => {
+      insertPlant('No Readings');
+      const plantB = insertPlant('Has Readings');
+      logSensorReading(plantB.id, 50);
+      const stats = getAllPlantsWithMoistureStats();
+      expect(stats).toHaveLength(2);
     });
   });
 

@@ -171,6 +171,9 @@ npm run sensor -- status 1
 # Show full reading history for a plant (20 most recent by default)
 npm run sensor -- history 1
 npm run sensor -- history 1 --limit 50
+
+# Show avg, min, and max moisture for all plants side by side
+npm run sensor -- avg
 ```
 
 ### `serve` — Start the MQTT subscriber *(direct)*
