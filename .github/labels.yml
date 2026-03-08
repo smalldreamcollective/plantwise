@@ -1,0 +1,50 @@
+# Conventional Commit types
+- name: feat
+  color: "0075ca"
+  description: New feature
+
+- name: fix
+  color: "d73a4a"
+  description: Bug fix
+
+- name: chore
+  color: "e4e669"
+  description: Tooling, infra, dependencies
+
+- name: docs
+  color: "fef2c0"
+  description: Documentation only
+
+# Phase tracking
+- name: phase-3
+  color: "0e8a16"
+  description: Phase 3 — Core CLI (complete)
+
+- name: phase-4
+  color: "006b75"
+  description: Phase 4 — Sensors + MQTT
+
+- name: phase-5
+  color: "5319e7"
+  description: Phase 5 — Pump actuation
+
+# Triage
+- name: good first issue
+  color: "7057ff"
+  description: Good for newcomers
+
+- name: help wanted
+  color: "008672"
+  description: Extra attention needed
+
+- name: wontfix
+  color: "ffffff"
+  description: Will not be addressed
+
+- name: duplicate
+  color: "cfd3d7"
+  description: Already reported
+
+- name: needs-triage
+  color: "f9d0c4"
+  description: Not yet reviewed
