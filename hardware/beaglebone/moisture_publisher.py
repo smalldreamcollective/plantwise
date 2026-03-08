@@ -75,7 +75,7 @@ def main() -> None:
     payload = json.dumps({"plant_id": PLANT_ID, "moisture_pct": moisture_pct})
     topic = f"plantwise/sensors/{DEVICE_ID}/moisture"
 
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     if MQTT_USERNAME:
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
