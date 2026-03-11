@@ -35,6 +35,12 @@ MQTT_PORT=1883
 MQTT_USERNAME=
 MQTT_PASSWORD=
 MQTT_NOTIFY=false
+
+# InfluxDB (Phase 4F — auto-initialized by Docker Compose, no manual setup needed)
+INFLUXDB_URL=http://localhost:8086
+INFLUXDB_TOKEN=plantwise-dev-token
+INFLUXDB_ORG=plantwise
+INFLUXDB_BUCKET=sensors
 ```
 
 ## Commands
@@ -184,17 +190,26 @@ npm run serve
 
 Connects to the Mosquitto broker and listens for soil moisture readings published by hardware sensors. Readings are stored in `sensor_readings` automatically. Set `MQTT_NOTIFY=true` in `.env` to fire a desktop notification when moisture drops below a plant's threshold.
 
-**Broker setup:**
+**Start the full local stack (Phase 4F):**
 ```bash
 docker compose up -d
 ```
 
-This starts a Mosquitto broker on port 1883 using the config in [`mosquitto/mosquitto.conf`](mosquitto/mosquitto.conf). To stop it: `docker compose down`.
+Starts four services:
+| Service | Port | Purpose |
+|---|---|---|
+| Mosquitto | 1883 | MQTT broker |
+| InfluxDB | 8086 | Time-series database (source of truth) |
+| Grafana | 3000 | Dashboards — open http://localhost:3000 (admin/admin) |
+| Telegraf | — | MQTT → InfluxDB bridge |
 
-**Hardware setup:** See [`hardware/beaglebone/moisture_publisher.py`](hardware/beaglebone/moisture_publisher.py) for the BeagleBone Black publisher script. Set `BROKER_HOST` to your Mac's LAN IP and run it via cron every 15 minutes:
-```bash
-*/15 * * * * python3 /path/to/moisture_publisher.py >> /tmp/plantwise-sensor.log 2>&1
-```
+Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with `docker compose down`.
+
+**Observability:** InfluxDB is the source of truth for all sensor data. SQLite on the Mac is a derived local cache used by CLI commands. Grafana is pre-provisioned with a PlantWise dashboard showing moisture history, current moisture gauges, and device last-seen status.
+
+**Hardware setup:** See [`hardware/beaglebone/setup.md`](hardware/beaglebone/setup.md) for the full BBB setup guide. The publisher runs as a systemd service with a store-and-forward SQLite buffer — readings buffered during an InfluxDB outage are replayed automatically on reconnect.
+
+**Cloud migration:** When ready to move off local Docker, update three env vars in `.env` — no code changes required. See `docs/prd/phase-4f-cloud-observability.md` for the migration path.
 
 ## Development
 

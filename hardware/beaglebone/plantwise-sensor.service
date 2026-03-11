@@ -1,0 +1,27 @@
+[Unit]
+Description=PlantWise moisture sensor publisher
+Documentation=https://github.com/smalldreamcollective/plantwise
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=debian
+EnvironmentFile=/home/debian/plantwise/.env
+ExecStart=/usr/bin/python3 /home/debian/plantwise/hardware/beaglebone/moisture_publisher.py
+
+# Graceful shutdown — SIGTERM triggers offline status publish before exit
+KillMode=process
+TimeoutStopSec=15
+
+# Restart on failure with backoff
+Restart=on-failure
+RestartSec=30
+
+# Log to journald (view with: journalctl -u plantwise-sensor -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plantwise-sensor
+
+[Install]
+WantedBy=multi-user.target
