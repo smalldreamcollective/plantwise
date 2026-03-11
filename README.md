@@ -200,7 +200,7 @@ Starts four services:
 |---|---|---|
 | Mosquitto | 1883 | MQTT broker |
 | InfluxDB | 8086 | Time-series database (source of truth) |
-| Grafana | 3000 | Dashboards — open http://localhost:3000 (admin/admin) |
+| Grafana | 3001 | Dashboards — open http://localhost:3001 (admin/admin) |
 | Telegraf | — | MQTT → InfluxDB bridge |
 
 Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with `docker compose down`.
