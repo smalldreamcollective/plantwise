@@ -8,23 +8,49 @@ The sensor publisher is distributed as a pip-installable Python package. No repo
 - Python 3.9+ and pip
 - NTP configured (see step 3)
 
-## 1. Install the package
+## 1. Add a deploy key (private repo auth)
+
+A deploy key is an SSH key scoped to this repo only, with read-only access. It keeps credentials out of URLs, shell history, and pip logs.
+
+**On the BBB** — generate a dedicated key (no passphrase; service runs unattended):
+```bash
+ssh-keygen -t ed25519 -C "plantwise-bbb" -f ~/.ssh/plantwise_deploy -N ""
+cat ~/.ssh/plantwise_deploy.pub
+```
+
+**On GitHub** — add the public key as a deploy key:
+Settings → Deploy keys → Add deploy key. Paste the output above. Leave "Allow write access" unchecked.
+
+**On the BBB** — configure SSH to use this key only for this repo:
+```bash
+cat >> ~/.ssh/config << 'EOF'
+
+Host github-plantwise
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/plantwise_deploy
+    IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+```
+
+Test the connection:
+```bash
+ssh -T git@github-plantwise
+# Expected: Hi smalldreamcollective/plantwise (deploy key)! ...
+```
+
+## 2. Install the package
 
 ```bash
-pip install "git+https://github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+pip install "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 ```
 
 This installs the `plantwise-sensor` command and all dependencies (`smbus2`, `paho-mqtt`, `influxdb-client`) in one step.
 
-> **Private repo?** Use a GitHub personal access token:
-> ```bash
-> pip install "git+https://oauth2:<TOKEN>@github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
-> ```
-
-## 2. Configure environment
+## 3. Configure environment
 
 ```bash
-cp ~/.plantwise.env.example ~/.plantwise.env  # or create manually
 nano ~/.plantwise.env
 ```
 
@@ -39,7 +65,7 @@ INFLUXDB_TOKEN=plantwise-dev-token
 
 Full template: [`hardware/beaglebone/.env.example`](.env.example)
 
-## 3. Configure NTP
+## 4. Configure NTP
 
 Critical for accurate InfluxDB timestamps.
 
@@ -49,14 +75,17 @@ sudo systemctl enable ntp && sudo systemctl start ntp
 timedatectl status   # verify sync
 ```
 
-## 4. Install the systemd service
+## 5. Install the systemd service
 
 ```bash
-# Download the service file (no full repo clone needed)
-curl -sL "https://raw.githubusercontent.com/smalldreamcollective/plantwise/main/hardware/beaglebone/plantwise-sensor.service" \
-  -o /tmp/plantwise-sensor.service
-sudo cp /tmp/plantwise-sensor.service /etc/systemd/system/
+# Fetch the service file via SSH (no full repo clone needed)
+scp git@github-plantwise:smalldreamcollective/plantwise/hardware/beaglebone/plantwise-sensor.service \
+    /tmp/plantwise-sensor.service 2>/dev/null || \
+curl -s --key ~/.ssh/plantwise_deploy \
+    "https://raw.githubusercontent.com/smalldreamcollective/plantwise/main/hardware/beaglebone/plantwise-sensor.service" \
+    -o /tmp/plantwise-sensor.service
 
+sudo cp /tmp/plantwise-sensor.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable plantwise-sensor
 sudo systemctl start plantwise-sensor
@@ -71,7 +100,7 @@ journalctl -u plantwise-sensor -f
 ## Deploying updates
 
 ```bash
-pip install --upgrade "git+https://github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+pip install --upgrade "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 sudo systemctl restart plantwise-sensor
 ```
 
@@ -84,3 +113,4 @@ sudo systemctl restart plantwise-sensor
 | I2C device not found | `i2cdetect -y 2` (should show `36` at 0x36) |
 | NTP not syncing | `ntpq -p` |
 | Check buffer | `sqlite3 ~/.plantwise_buffer.db "SELECT * FROM pending_readings ORDER BY id DESC LIMIT 20;"` |
+| SSH auth failing | `ssh -vT git@github-plantwise` |
