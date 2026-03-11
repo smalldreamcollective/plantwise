@@ -1,61 +1,62 @@
 # BeagleBone Black — Setup Guide
 
+The sensor publisher is distributed as a pip-installable Python package. No repo clone required on the BBB.
+
 ## Prerequisites
 
 - Debian 11 image on the BBB
-- Python 3.9+
-- NTP configured (see below)
-- Git installed: `sudo apt-get install -y git`
+- Python 3.9+ and pip
+- NTP configured (see step 3)
 
-## 1. Clone the repo
-
-```bash
-mkdir -p /home/debian/plantwise
-git clone https://github.com/smalldreamcollective/plantwise.git /home/debian/plantwise
-```
-
-## 2. Install Python dependencies
+## 1. Install the package
 
 ```bash
-sudo apt-get install -y python3-pip python3-smbus
-pip3 install smbus2 paho-mqtt influxdb-client
+pip install "git+https://github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 ```
 
-## 3. Configure environment
+This installs the `plantwise-sensor` command and all dependencies (`smbus2`, `paho-mqtt`, `influxdb-client`) in one step.
 
-Copy and edit the env file:
+> **Private repo?** Use a GitHub personal access token:
+> ```bash
+> pip install "git+https://oauth2:<TOKEN>@github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+> ```
+
+## 2. Configure environment
 
 ```bash
-cp /home/debian/plantwise/hardware/beaglebone/.env.example /home/debian/plantwise/.env
-nano /home/debian/plantwise/.env
+cp ~/.plantwise.env.example ~/.plantwise.env  # or create manually
+nano ~/.plantwise.env
 ```
 
-Required values:
+Minimum required values:
 ```
-DEVICE_ID=living-room          # unique slug for this device
+DEVICE_ID=living-room          # unique slug for this BBB
 PLANT_ID=1                     # plantwise DB plant ID this sensor monitors
 MQTT_HOST=192.168.1.x          # Mac's LAN IP
 INFLUXDB_URL=http://192.168.1.x:8086
 INFLUXDB_TOKEN=plantwise-dev-token
 ```
 
-## 4. Configure NTP
+Full template: [`hardware/beaglebone/.env.example`](.env.example)
 
-Critical for accurate time-series timestamps in InfluxDB.
+## 3. Configure NTP
+
+Critical for accurate InfluxDB timestamps.
 
 ```bash
 sudo apt-get install -y ntp
-sudo systemctl enable ntp
-sudo systemctl start ntp
-# Verify sync
-timedatectl status
+sudo systemctl enable ntp && sudo systemctl start ntp
+timedatectl status   # verify sync
 ```
 
-## 5. Install the systemd service
+## 4. Install the systemd service
 
 ```bash
-sudo cp /home/debian/plantwise/hardware/beaglebone/plantwise-sensor.service \
-        /etc/systemd/system/
+# Download the service file (no full repo clone needed)
+curl -sL "https://raw.githubusercontent.com/smalldreamcollective/plantwise/main/hardware/beaglebone/plantwise-sensor.service" \
+  -o /tmp/plantwise-sensor.service
+sudo cp /tmp/plantwise-sensor.service /etc/systemd/system/
+
 sudo systemctl daemon-reload
 sudo systemctl enable plantwise-sensor
 sudo systemctl start plantwise-sensor
@@ -67,11 +68,10 @@ sudo systemctl status plantwise-sensor
 journalctl -u plantwise-sensor -f
 ```
 
-## 6. Deploying updates
+## Deploying updates
 
 ```bash
-cd /home/debian/plantwise
-git pull
+pip install --upgrade "git+https://github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 sudo systemctl restart plantwise-sensor
 ```
 
@@ -83,4 +83,4 @@ sudo systemctl restart plantwise-sensor
 | InfluxDB not reachable | `curl http://<mac-ip>:8086/ping` |
 | I2C device not found | `i2cdetect -y 2` (should show `36` at 0x36) |
 | NTP not syncing | `ntpq -p` |
-| Check buffer contents | `sqlite3 ~/.plantwise_buffer.db "SELECT * FROM pending_readings ORDER BY id DESC LIMIT 20;"` |
+| Check buffer | `sqlite3 ~/.plantwise_buffer.db "SELECT * FROM pending_readings ORDER BY id DESC LIMIT 20;"` |

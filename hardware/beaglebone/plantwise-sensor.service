@@ -7,8 +7,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=debian
-EnvironmentFile=/home/debian/plantwise/.env
-ExecStart=/usr/bin/python3 /home/debian/plantwise/hardware/beaglebone/moisture_publisher.py
+EnvironmentFile=/home/debian/.plantwise.env
+ExecStart=/home/debian/.local/bin/plantwise-sensor
 
 # Graceful shutdown — SIGTERM triggers offline status publish before exit
 KillMode=process

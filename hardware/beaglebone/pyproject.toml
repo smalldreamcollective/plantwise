@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "plantwise-sensor"
+version = "0.1.0"
+description = "PlantWise moisture sensor publisher for BeagleBone Black"
+requires-python = ">=3.9"
+dependencies = [
+    "smbus2",
+    "paho-mqtt>=2.0",
+    "influxdb-client",
+]
+
+[project.scripts]
+plantwise-sensor = "plantwise_sensor.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["plantwise_sensor*"]

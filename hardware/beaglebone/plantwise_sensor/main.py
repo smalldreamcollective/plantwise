@@ -10,8 +10,12 @@ Runs as a long-running daemon. On each interval:
 Publishes device status (online/offline) to `plantwise/devices/<id>/status`.
 Clean shutdown on SIGTERM publishes offline status before exit.
 
-Requirements (pip install):
-  smbus2 paho-mqtt influxdb-client
+Install:
+  pip install "git+https://github.com/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+
+Update:
+  pip install --upgrade "git+https://..."
+  sudo systemctl restart plantwise-sensor
 
 systemd service: hardware/beaglebone/plantwise-sensor.service
 """
