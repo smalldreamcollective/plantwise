@@ -15,6 +15,7 @@
     "update": "tsx src/cli/index.ts update",
     "log": "tsx src/cli/index.ts log",
     "sensor": "tsx src/cli/index.ts sensor",
+    "device": "tsx src/cli/index.ts device",
     "remind": "tsx src/cli/index.ts remind",
     "remove": "tsx src/cli/index.ts remove",
     "status": "tsx src/cli/index.ts status",

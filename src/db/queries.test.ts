@@ -4,8 +4,10 @@ process.env['DB_PATH'] = ':memory:';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb } from './schema';
 import {
+  assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
+  getDevice,
   getHealthChecksForPlant,
   getLastCareEvent,
   getLatestSensorReading,
@@ -16,10 +18,12 @@ import {
   getSensorReadings,
   insertHealthCheck,
   insertPlant,
+  listDevices,
   listPlants,
   logCareEvent,
   logSensorReading,
   removePlant,
+  unassignDevice,
   updatePlant,
 } from './queries';
 
@@ -27,7 +31,7 @@ describe('DB queries', () => {
   beforeEach(() => {
     const db = getDb();
     db.exec(
-      'DELETE FROM sensor_readings; DELETE FROM care_events; DELETE FROM health_checks; DELETE FROM plants;'
+      'DELETE FROM devices; DELETE FROM sensor_readings; DELETE FROM care_events; DELETE FROM health_checks; DELETE FROM plants;'
     );
   });
 
@@ -531,6 +535,65 @@ describe('DB queries', () => {
       const plant = insertPlant('Orchid');
       const overwatered = getPlantsOverwatered();
       expect(overwatered.some((p) => p.id === plant.id)).toBe(false);
+    });
+  });
+
+  describe('devices', () => {
+    it('assigns a device to a plant', () => {
+      const plant = insertPlant('Monstera');
+      const device = assignDevice('living-room', plant.id);
+      expect(device.device_id).toBe('living-room');
+      expect(device.plant_id).toBe(plant.id);
+      expect(device.name).toBeNull();
+    });
+
+    it('assigns a device with an optional name', () => {
+      const plant = insertPlant('Fern');
+      const device = assignDevice('bedroom', plant.id, 'Fern sensor');
+      expect(device.name).toBe('Fern sensor');
+    });
+
+    it('reassigns a device to a different plant (upsert)', () => {
+      const p1 = insertPlant('Rose');
+      const p2 = insertPlant('Cactus');
+      assignDevice('living-room', p1.id);
+      const updated = assignDevice('living-room', p2.id);
+      expect(updated.plant_id).toBe(p2.id);
+    });
+
+    it('getDevice returns the device', () => {
+      const plant = insertPlant('Ficus');
+      assignDevice('kitchen', plant.id);
+      const d = getDevice('kitchen');
+      expect(d).toBeDefined();
+      expect(d?.plant_id).toBe(plant.id);
+    });
+
+    it('getDevice returns undefined for unknown device', () => {
+      expect(getDevice('unknown-device')).toBeUndefined();
+    });
+
+    it('listDevices returns all assignments with plant name', () => {
+      const p1 = insertPlant('Aloe');
+      const p2 = insertPlant('Pothos');
+      assignDevice('room-a', p1.id);
+      assignDevice('room-b', p2.id);
+      const devices = listDevices();
+      expect(devices).toHaveLength(2);
+      expect(devices.map((d) => d.device_id).sort()).toEqual(['room-a', 'room-b']);
+      expect(devices.find((d) => d.device_id === 'room-a')?.plant_name).toBe('Aloe');
+    });
+
+    it('unassigns a device', () => {
+      const plant = insertPlant('Succulent');
+      assignDevice('office', plant.id);
+      const removed = unassignDevice('office');
+      expect(removed).toBe(true);
+      expect(getDevice('office')).toBeUndefined();
+    });
+
+    it('unassignDevice returns false for unknown device', () => {
+      expect(unassignDevice('nonexistent')).toBe(false);
     });
   });
 });

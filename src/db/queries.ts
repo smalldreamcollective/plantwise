@@ -36,6 +36,13 @@ export interface CareEvent {
   occurred_at: string;
 }
 
+export interface Device {
+  device_id: string;
+  plant_id: number;
+  name: string | null;
+  created_at: string;
+}
+
 export interface PlantWithWatering extends Plant {
   last_watered_at: string | null;
   days_since_watered: number | null;
@@ -296,6 +303,44 @@ export function getAllPlantsWithMoistureStats(): PlantMoistureStats[] {
        ORDER BY p.name ASC`
     )
     .all() as PlantMoistureStats[];
+}
+
+// ── Devices ───────────────────────────────────────────────────────────────────
+
+export function assignDevice(deviceId: string, plantId: number, name?: string): Device {
+  const db = getDb();
+  return db
+    .prepare(
+      `INSERT INTO devices (device_id, plant_id, name)
+       VALUES (?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET plant_id = excluded.plant_id, name = excluded.name
+       RETURNING *`
+    )
+    .get(deviceId, plantId, name ?? null) as Device;
+}
+
+export function unassignDevice(deviceId: string): boolean {
+  const db = getDb();
+  return db.prepare('DELETE FROM devices WHERE device_id = ?').run(deviceId).changes > 0;
+}
+
+export function getDevice(deviceId: string): Device | undefined {
+  const db = getDb();
+  return db.prepare('SELECT * FROM devices WHERE device_id = ?').get(deviceId) as
+    | Device
+    | undefined;
+}
+
+export function listDevices(): (Device & { plant_name: string })[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT d.*, p.name AS plant_name
+       FROM devices d
+       JOIN plants p ON d.plant_id = p.id
+       ORDER BY d.device_id ASC`
+    )
+    .all() as (Device & { plant_name: string })[];
 }
 
 export function getAllPlantsWithLatestReading(): (Plant & {
