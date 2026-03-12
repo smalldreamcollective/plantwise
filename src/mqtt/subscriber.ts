@@ -1,5 +1,5 @@
 import mqtt from 'mqtt';
-import { getPlant, logSensorReading } from '../db/queries';
+import { getDevice, getPlant, logSensorReading } from '../db/queries';
 import { notify } from '../utils/notify';
 
 const MQTT_HOST = process.env['MQTT_HOST'] ?? 'localhost';
@@ -10,7 +10,7 @@ const MQTT_PASSWORD = process.env['MQTT_PASSWORD'] ?? '';
 const TOPIC = 'plantwise/sensors/+/moisture';
 
 interface MoisturePayload {
-  plant_id: unknown;
+  device_id: unknown;
   moisture_pct: unknown;
 }
 
@@ -31,11 +31,11 @@ export function handleMessage(topic: string, message: Buffer): void {
     return;
   }
 
-  const plantId = payload.plant_id;
+  const deviceId = payload.device_id;
   const moisturePct = payload.moisture_pct;
 
-  if (typeof plantId !== 'number' || !Number.isInteger(plantId) || plantId <= 0) {
-    console.error(`[mqtt] invalid plant_id on ${topic}: ${JSON.stringify(plantId)}`);
+  if (typeof deviceId !== 'string' || deviceId.trim() === '') {
+    console.error(`[mqtt] missing device_id on ${topic}: ${raw}`);
     return;
   }
 
@@ -49,13 +49,21 @@ export function handleMessage(topic: string, message: Buffer): void {
     return;
   }
 
-  const plant = getPlant(plantId);
-  if (!plant) {
-    console.error(`[mqtt] no plant with id ${plantId} (topic: ${topic})`);
+  const device = getDevice(deviceId);
+  if (!device) {
+    console.error(
+      `[mqtt] no plant assigned to device "${deviceId}" — run: plantwise device assign ${deviceId} <plant-id>`
+    );
     return;
   }
 
-  logSensorReading(plantId, moisturePct, 'hardware');
+  const plant = getPlant(device.plant_id);
+  if (!plant) {
+    console.error(`[mqtt] plant ${device.plant_id} assigned to "${deviceId}" no longer exists`);
+    return;
+  }
+
+  logSensorReading(device.plant_id, moisturePct, 'hardware');
 
   const tooWet = moisturePct > plant.moisture_upper_threshold_pct;
   const tooDry = moisturePct < plant.moisture_threshold_pct;

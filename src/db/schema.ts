@@ -52,6 +52,13 @@ function initSchema(db: Database.Database): void {
       source TEXT NOT NULL DEFAULT 'manual',
       recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS devices (
+      device_id TEXT PRIMARY KEY,
+      plant_id INTEGER NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+      name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrate existing DBs: add watering_interval_days if not already present

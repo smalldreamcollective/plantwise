@@ -7,6 +7,7 @@ import { getDb } from '../db/schema';
 import { notify } from '../utils/notify';
 import { startSubscriber } from '../mqtt/subscriber';
 import {
+  assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
   getHealthChecksForPlant,
@@ -16,10 +17,12 @@ import {
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertPlant,
+  listDevices,
   listPlants,
   logCareEvent,
   logSensorReading,
   removePlant,
+  unassignDevice,
   updatePlant,
 } from '../db/queries';
 
@@ -657,6 +660,71 @@ sensorCmd
     }
   });
 
+const deviceCmd = program.command('device').description('Manage sensor device → plant assignments');
+
+deviceCmd
+  .command('assign <device-id> <plant-id>')
+  .description('Assign a sensor device to a plant')
+  .option('-n, --name <name>', 'Optional label for this device')
+  .action((deviceId: string, plantIdStr: string, options: { name?: string }) => {
+    const plantId = parseInt(plantIdStr, 10);
+    if (isNaN(plantId) || plantId < 1) {
+      console.error('Error: plant-id must be a positive number');
+      process.exit(1);
+    }
+    try {
+      const plant = getPlant(plantId);
+      if (!plant) {
+        console.error(`Error: No plant found with ID ${plantId}`);
+        process.exit(1);
+      }
+      assignDevice(deviceId, plantId, options.name);
+      console.log(`Assigned "${deviceId}" → ${plant.name} [ID: ${plantId}]`);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+deviceCmd
+  .command('unassign <device-id>')
+  .description('Remove a device → plant assignment')
+  .action((deviceId: string) => {
+    try {
+      const removed = unassignDevice(deviceId);
+      if (!removed) {
+        console.error(`Error: No assignment found for device "${deviceId}"`);
+        process.exit(1);
+      }
+      console.log(`Removed assignment for "${deviceId}"`);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+deviceCmd
+  .command('list')
+  .description('List all device → plant assignments')
+  .action(() => {
+    try {
+      const devices = listDevices();
+      if (devices.length === 0) {
+        console.log('No devices assigned yet. Run: plantwise device assign <device-id> <plant-id>');
+        return;
+      }
+      console.log('\nDevice assignments:\n');
+      for (const d of devices) {
+        const label = d.name ? ` (${d.name})` : '';
+        console.log(`  ${d.device_id.padEnd(20)} → ${d.plant_name} [ID: ${d.plant_id}]${label}`);
+      }
+      console.log();
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 const helpText: Record<string, string> = {
   add: `
   add <name> [options]
@@ -795,6 +863,25 @@ const helpText: Record<string, string> = {
       npm run update -- 1 --upper-threshold 80
       npm run update -- 1 --notes "Moved to south window"
 `,
+  device: `
+  device <subcommand>
+    Manage sensor device → plant assignments. Readings from hardware devices
+    are matched to plants using this registry — no plant ID needed on the device.
+
+    Subcommands:
+      assign <device-id> <plant-id>   Map a device to a plant
+      unassign <device-id>            Remove a device mapping
+      list                            Show all device assignments
+
+    Options (assign):
+      -n, --name <name>   Optional label for this device
+
+    Examples:
+      npm run device -- assign living-room 1
+      npm run device -- assign living-room 1 --name "Monstera sensor"
+      npm run device -- unassign living-room
+      npm run device -- list
+`,
   serve: `
   serve
     Start the MQTT subscriber. Connects to the Mosquitto broker and listens for
@@ -850,6 +937,7 @@ COMMANDS
   update    Update a plant's name, species, notes, or care settings
   log       Log a care event (water / feed / repot)
   sensor    Manage soil moisture sensor readings
+  device    Manage sensor device → plant assignments
   serve     Start the MQTT subscriber (listen for hardware sensor readings)
   remind    List plants overdue for watering
   remove    Remove a plant from your collection
@@ -864,6 +952,7 @@ Run "npm run help -- <command>" for usage examples.
   npm run help -- update
   npm run help -- log
   npm run help -- sensor
+  npm run help -- device
   npm run help -- serve
   npm run help -- remind
   npm run help -- remove

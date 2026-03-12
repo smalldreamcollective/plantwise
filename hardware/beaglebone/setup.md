@@ -66,13 +66,19 @@ nano ~/.plantwise.env
 Minimum required values:
 ```
 DEVICE_ID=living-room          # unique slug for this BBB
-PLANT_ID=1                     # plantwise DB plant ID this sensor monitors
 MQTT_HOST=192.168.1.x          # Mac's LAN IP
 INFLUXDB_URL=http://192.168.1.x:8086
 INFLUXDB_TOKEN=plantwise-dev-token
 ```
 
 Full template: [`hardware/beaglebone/.env.example`](.env.example)
+
+Then on your Mac, assign the device to a plant:
+```bash
+plantwise device assign living-room <plant-id>
+```
+
+Plant assignments live on the server — no `PLANT_ID` is needed on the device itself.
 
 ## 5. Configure NTP
 

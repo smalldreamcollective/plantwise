@@ -37,7 +37,6 @@ from influxdb_client.client.write_api import SYNCHRONOUS  # type: ignore[import]
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 DEVICE_ID   = os.environ.get("DEVICE_ID", "living-room")
-PLANT_ID    = int(os.environ.get("PLANT_ID", "1"))
 INTERVAL_S  = int(os.environ.get("SENSOR_INTERVAL_S", "900"))  # 15 min default
 
 BROKER_HOST    = os.environ.get("MQTT_HOST", "192.168.1.x")
@@ -100,24 +99,30 @@ def init_buffer(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pending_readings (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant_id    INTEGER NOT NULL,
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id    TEXT NOT NULL,
             moisture_pct INTEGER NOT NULL,
-            sensor_id   TEXT NOT NULL,
-            recorded_at TEXT NOT NULL,
-            published   INTEGER NOT NULL DEFAULT 0
+            recorded_at  TEXT NOT NULL,
+            published    INTEGER NOT NULL DEFAULT 0
         )
     """)
+    # Migrate old schema (plant_id column) to new (device_id column)
+    try:
+        conn.execute("ALTER TABLE pending_readings ADD COLUMN device_id TEXT NOT NULL DEFAULT ''")
+        conn.execute(f"UPDATE pending_readings SET device_id = '{DEVICE_ID}' WHERE device_id = ''")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
     conn.commit()
     return conn
 
 
-def buffer_reading(conn: sqlite3.Connection, plant_id: int, moisture_pct: int,
-                   sensor_id: str, recorded_at: str) -> int:
+def buffer_reading(conn: sqlite3.Connection, moisture_pct: int,
+                   device_id: str, recorded_at: str) -> int:
     cur = conn.execute(
-        "INSERT INTO pending_readings (plant_id, moisture_pct, sensor_id, recorded_at) "
-        "VALUES (?, ?, ?, ?)",
-        (plant_id, moisture_pct, sensor_id, recorded_at),
+        "INSERT INTO pending_readings (device_id, moisture_pct, recorded_at) "
+        "VALUES (?, ?, ?)",
+        (device_id, moisture_pct, recorded_at),
     )
     conn.commit()
     return cur.lastrowid
@@ -126,7 +131,7 @@ def buffer_reading(conn: sqlite3.Connection, plant_id: int, moisture_pct: int,
 def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
     """Write all pending rows to InfluxDB. Returns number of rows flushed."""
     rows = conn.execute(
-        "SELECT id, plant_id, moisture_pct, sensor_id, recorded_at "
+        "SELECT id, device_id, moisture_pct, recorded_at "
         "FROM pending_readings WHERE published = 0 ORDER BY id ASC"
     ).fetchall()
 
@@ -137,11 +142,10 @@ def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
         influx = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
         write_api = influx.write_api(write_options=SYNCHRONOUS)
         points = []
-        for row_id, plant_id, moisture_pct, sensor_id, recorded_at in rows:
+        for _, device_id, moisture_pct, recorded_at in rows:
             point = (
                 Point("moisture")
-                .tag("device_id", sensor_id)
-                .tag("plant_id", str(plant_id))
+                .tag("device_id", device_id)
                 .field("moisture_pct", moisture_pct)
                 .time(recorded_at, WritePrecision.SECONDS)
             )
@@ -188,7 +192,7 @@ def publish_status(status: str) -> None:
 
 def publish_reading(moisture_pct: int) -> None:
     topic = f"plantwise/sensors/{DEVICE_ID}/moisture"
-    payload = json.dumps({"plant_id": PLANT_ID, "moisture_pct": moisture_pct})
+    payload = json.dumps({"device_id": DEVICE_ID, "moisture_pct": moisture_pct})
     try:
         client = get_mqtt_client()
         client.connect(BROKER_HOST, BROKER_PORT, keepalive=10)
@@ -213,8 +217,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_sigterm)
     signal.signal(signal.SIGINT, _handle_sigterm)
 
-    log.info("PlantWise sensor publisher starting (device=%s plant=%d interval=%ds)",
-             DEVICE_ID, PLANT_ID, INTERVAL_S)
+    log.info("PlantWise sensor publisher starting (device=%s interval=%ds)",
+             DEVICE_ID, INTERVAL_S)
 
     conn = init_buffer(BUFFER_DB)
     publish_status("online")
@@ -229,9 +233,9 @@ def main() -> None:
                 bus.close()
 
             recorded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            buffer_reading(conn, PLANT_ID, moisture_pct, DEVICE_ID, recorded_at)
-            log.info("buffered plant=%d moisture=%d%% temp=%.1fF",
-                     PLANT_ID, moisture_pct, temp_f)
+            buffer_reading(conn, moisture_pct, DEVICE_ID, recorded_at)
+            log.info("buffered device=%s moisture=%d%% temp=%.1fF",
+                     DEVICE_ID, moisture_pct, temp_f)
 
             flushed = flush_buffer_to_influx(conn)
             if flushed:
