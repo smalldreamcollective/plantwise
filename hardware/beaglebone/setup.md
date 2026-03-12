@@ -4,9 +4,9 @@ The sensor publisher is distributed as a pip-installable Python package. No repo
 
 ## Prerequisites
 
-- Debian 11 image on the BBB
-- Python 3.9+ and pip
-- NTP configured (see step 3)
+- Debian 12 image on the BBB
+- Python 3.11+ (ships with Debian 12)
+- NTP configured (see step 4)
 
 ## 1. Add a deploy key (private repo auth)
 
@@ -40,15 +40,24 @@ ssh -T git@github-plantwise
 # Expected: Hi smalldreamcollective/plantwise (deploy key)! ...
 ```
 
-## 2. Install the package
+## 2. Install pipx
 
 ```bash
-pip install "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+sudo apt-get install -y pipx
+pipx ensurepath
+```
+
+`pipx` installs CLI tools in isolated virtualenvs and exposes them in `~/.local/bin` — no conflicts with system Python.
+
+## 3. Install the package
+
+```bash
+pipx install "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 ```
 
 This installs the `plantwise-sensor` command and all dependencies (`smbus2`, `paho-mqtt`, `influxdb-client`) in one step.
 
-## 3. Configure environment
+## 4. Configure environment
 
 ```bash
 nano ~/.plantwise.env
@@ -65,7 +74,7 @@ INFLUXDB_TOKEN=plantwise-dev-token
 
 Full template: [`hardware/beaglebone/.env.example`](.env.example)
 
-## 4. Configure NTP
+## 5. Configure NTP
 
 Critical for accurate InfluxDB timestamps.
 
@@ -75,7 +84,7 @@ sudo systemctl enable ntp && sudo systemctl start ntp
 timedatectl status   # verify sync
 ```
 
-## 5. Install the systemd service
+## 6. Install the systemd service
 
 ```bash
 # Fetch the service file via SSH (no full repo clone needed)
@@ -100,7 +109,7 @@ journalctl -u plantwise-sensor -f
 ## Deploying updates
 
 ```bash
-pip install --upgrade "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+pipx install --force "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
 sudo systemctl restart plantwise-sensor
 ```
 
