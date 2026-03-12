@@ -41,7 +41,7 @@ services:
   telegraf:
     image: telegraf:1.30
     environment:
-      INFLUXDB_URL: ${INFLUXDB_URL:-http://influxdb:8086}
+      INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-plantwise-dev-token}
       INFLUXDB_ORG: ${INFLUXDB_ORG:-plantwise}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-sensors}
