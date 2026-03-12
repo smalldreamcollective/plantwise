@@ -106,14 +106,27 @@ def init_buffer(path: str) -> sqlite3.Connection:
             published    INTEGER NOT NULL DEFAULT 0
         )
     """)
-    # Migrate old schema (plant_id column) to new (device_id column)
-    try:
-        conn.execute("ALTER TABLE pending_readings ADD COLUMN device_id TEXT NOT NULL DEFAULT ''")
-        conn.execute(f"UPDATE pending_readings SET device_id = '{DEVICE_ID}' WHERE device_id = ''")
+    # Migrate old schema: if plant_id column exists, rebuild table without it
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(pending_readings)").fetchall()]
+    if "plant_id" in cols:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_readings_new (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id    TEXT NOT NULL,
+                moisture_pct INTEGER NOT NULL,
+                recorded_at  TEXT NOT NULL,
+                published    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        device_id_col = "device_id" if "device_id" in cols else f"'{DEVICE_ID}'"
+        conn.execute(f"""
+            INSERT INTO pending_readings_new (id, device_id, moisture_pct, recorded_at, published)
+            SELECT id, {device_id_col}, moisture_pct, recorded_at, published
+            FROM pending_readings
+        """)
+        conn.execute("DROP TABLE pending_readings")
+        conn.execute("ALTER TABLE pending_readings_new RENAME TO pending_readings")
         conn.commit()
-    except Exception:
-        pass  # Column already exists
-    conn.commit()
     return conn
 
 
