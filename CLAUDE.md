@@ -32,6 +32,7 @@ Never read .env files.
 - Branch naming follows `feat/42-short-description` — the issue number is part of the branch name.
 - A `commit-msg` hook automatically appends `Closes #<n>` to every commit based on the branch name, so issues close when the PR merges.
 - Use Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`
+- **Never commit directly to main.** All changes must go through a branch and PR so CI/CD checks and tests can run. No exceptions.
 - Pre-commit hook runs lint-staged automatically — do not skip with `--no-verify`
 - Run `npm test` before opening a PR
 - **Always update README.md and the `help-guide` command in `src/cli/index.ts`** whenever commands are added, changed, or removed
