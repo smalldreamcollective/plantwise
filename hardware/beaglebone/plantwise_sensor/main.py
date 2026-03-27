@@ -2,10 +2,16 @@
 PlantWise — BeagleBone Black moisture publisher (systemd service)
 
 Runs as a long-running daemon. On each interval:
-  1. Reads the Seesaw I2C soil moisture sensor
+  1. Reads each configured Seesaw I2C soil moisture sensor via PCA9548A mux
   2. Writes to a local SQLite store-and-forward buffer (durable across restarts)
   3. Flushes all pending buffer rows to InfluxDB (with retry on reconnect)
-  4. Publishes to MQTT broker (QoS 1)
+  4. Publishes each reading to MQTT broker (QoS 1)
+
+Topic format: plantwise/sensors/<device_id>/<sensor_id>/moisture
+Payload:      {"device_id": "living-room", "sensor_id": "monstera", "moisture_pct": 42}
+
+Channel names are configured via CH0_NAME … CH7_NAME env vars.
+Channels with no name set are skipped.
 
 Publishes device status (online/offline) to `plantwise/devices/<id>/status`.
 Clean shutdown on SIGTERM publishes offline status before exit.
@@ -51,14 +57,23 @@ INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET", "sensors")
 
 BUFFER_DB = os.environ.get("BUFFER_DB_PATH", "/home/debian/.plantwise_buffer.db")
 
-# I2C bus and Seesaw address
+# I2C bus and addresses
 I2C_BUS  = 2
-I2C_ADDR = 0x36
+I2C_ADDR = 0x36   # Seesaw soil sensor
+MUX_ADDR = 0x70   # PCA9548A multiplexer
 
 # Seesaw raw moisture calibration (tune for your sensor).
 # Typical values: ~200 (bone dry) → ~1800 (fully saturated).
 MOISTURE_DRY = 200
 MOISTURE_WET = 1800
+
+# Build ordered list of (channel, sensor_id) from CH0_NAME … CH7_NAME env vars.
+# Channels with no name set are skipped.
+_SENSORS: list[tuple[int, str]] = [
+    (ch, name)
+    for ch in range(8)
+    if (name := os.environ.get(f"CH{ch}_NAME", "").strip())
+]
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +85,12 @@ logging.basicConfig(
 log = logging.getLogger("plantwise")
 
 # ── Sensor reading ─────────────────────────────────────────────────────────────
+
+def select_mux_channel(bus: smbus2.SMBus, channel: int) -> None:
+    """Select a channel on the PCA9548A multiplexer (addr 0x70)."""
+    bus.write_byte(MUX_ADDR, 1 << channel)
+    time.sleep(0.01)
+
 
 def scale_moisture(raw: int) -> int:
     """Convert raw Seesaw moisture to 0–100%."""
@@ -101,18 +122,21 @@ def init_buffer(path: str) -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS pending_readings (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id    TEXT NOT NULL,
+            sensor_id    TEXT NOT NULL DEFAULT '',
             moisture_pct INTEGER NOT NULL,
             recorded_at  TEXT NOT NULL,
             published    INTEGER NOT NULL DEFAULT 0
         )
     """)
-    # Migrate old schema: if plant_id column exists, rebuild table without it
     cols = [row[1] for row in conn.execute("PRAGMA table_info(pending_readings)").fetchall()]
+
+    # Migrate old schema: if plant_id column exists, rebuild table without it
     if "plant_id" in cols:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS pending_readings_new (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 device_id    TEXT NOT NULL,
+                sensor_id    TEXT NOT NULL DEFAULT '',
                 moisture_pct INTEGER NOT NULL,
                 recorded_at  TEXT NOT NULL,
                 published    INTEGER NOT NULL DEFAULT 0
@@ -127,15 +151,22 @@ def init_buffer(path: str) -> sqlite3.Connection:
         conn.execute("DROP TABLE pending_readings")
         conn.execute("ALTER TABLE pending_readings_new RENAME TO pending_readings")
         conn.commit()
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(pending_readings)").fetchall()]
+
+    # Migrate: add sensor_id column if missing
+    if "sensor_id" not in cols:
+        conn.execute(f"ALTER TABLE pending_readings ADD COLUMN sensor_id TEXT NOT NULL DEFAULT '{DEVICE_ID}'")
+        conn.commit()
+
     return conn
 
 
 def buffer_reading(conn: sqlite3.Connection, moisture_pct: int,
-                   device_id: str, recorded_at: str) -> int:
+                   device_id: str, sensor_id: str, recorded_at: str) -> int:
     cur = conn.execute(
-        "INSERT INTO pending_readings (device_id, moisture_pct, recorded_at) "
-        "VALUES (?, ?, ?)",
-        (device_id, moisture_pct, recorded_at),
+        "INSERT INTO pending_readings (device_id, sensor_id, moisture_pct, recorded_at) "
+        "VALUES (?, ?, ?, ?)",
+        (device_id, sensor_id, moisture_pct, recorded_at),
     )
     conn.commit()
     return cur.lastrowid
@@ -144,7 +175,7 @@ def buffer_reading(conn: sqlite3.Connection, moisture_pct: int,
 def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
     """Write all pending rows to InfluxDB. Returns number of rows flushed."""
     rows = conn.execute(
-        "SELECT id, device_id, moisture_pct, recorded_at "
+        "SELECT id, device_id, sensor_id, moisture_pct, recorded_at "
         "FROM pending_readings WHERE published = 0 ORDER BY id ASC"
     ).fetchall()
 
@@ -155,10 +186,11 @@ def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
         influx = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
         write_api = influx.write_api(write_options=SYNCHRONOUS)
         points = []
-        for _, device_id, moisture_pct, recorded_at in rows:
+        for _, device_id, sensor_id, moisture_pct, recorded_at in rows:
             point = (
                 Point("moisture")
                 .tag("device_id", device_id)
+                .tag("sensor_id", sensor_id)
                 .field("moisture_pct", moisture_pct)
                 .time(recorded_at, WritePrecision.S)
             )
@@ -203,9 +235,9 @@ def publish_status(status: str) -> None:
         log.warning("MQTT status publish failed: %s", e)
 
 
-def publish_reading(moisture_pct: int) -> None:
-    topic = f"plantwise/sensors/{DEVICE_ID}/moisture"
-    payload = json.dumps({"device_id": DEVICE_ID, "moisture_pct": moisture_pct})
+def publish_reading(moisture_pct: int, sensor_id: str) -> None:
+    topic = f"plantwise/sensors/{DEVICE_ID}/{sensor_id}/moisture"
+    payload = json.dumps({"device_id": DEVICE_ID, "sensor_id": sensor_id, "moisture_pct": moisture_pct})
     try:
         client = get_mqtt_client()
         client.connect(BROKER_HOST, BROKER_PORT, keepalive=10)
@@ -230,8 +262,12 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_sigterm)
     signal.signal(signal.SIGINT, _handle_sigterm)
 
-    log.info("PlantWise sensor publisher starting (device=%s interval=%ds)",
-             DEVICE_ID, INTERVAL_S)
+    if not _SENSORS:
+        log.error("No sensors configured — set CH0_NAME, CH1_NAME, etc. in .plantwise.env")
+        return
+
+    log.info("PlantWise sensor publisher starting (device=%s sensors=%s interval=%ds)",
+             DEVICE_ID, [s for _, s in _SENSORS], INTERVAL_S)
 
     conn = init_buffer(BUFFER_DB)
     publish_status("online")
@@ -240,21 +276,23 @@ def main() -> None:
         try:
             bus = smbus2.SMBus(I2C_BUS)
             try:
-                moisture_pct = read_moisture(bus)
-                temp_f = read_temp_f(bus)
+                for channel, sensor_id in _SENSORS:
+                    select_mux_channel(bus, channel)
+                    moisture_pct = read_moisture(bus)
+                    temp_f = read_temp_f(bus)
+
+                    recorded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    buffer_reading(conn, moisture_pct, DEVICE_ID, sensor_id, recorded_at)
+                    log.info("buffered device=%s sensor=%s moisture=%d%% temp=%.1fF",
+                             DEVICE_ID, sensor_id, moisture_pct, temp_f)
+
+                    publish_reading(moisture_pct, sensor_id)
             finally:
                 bus.close()
-
-            recorded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            buffer_reading(conn, moisture_pct, DEVICE_ID, recorded_at)
-            log.info("buffered device=%s moisture=%d%% temp=%.1fF",
-                     DEVICE_ID, moisture_pct, temp_f)
 
             flushed = flush_buffer_to_influx(conn)
             if flushed:
                 log.info("flushed %d reading(s) to InfluxDB", flushed)
-
-            publish_reading(moisture_pct)
 
         except Exception as e:
             log.error("sensor read error: %s", e)
