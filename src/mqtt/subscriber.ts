@@ -7,10 +7,11 @@ const MQTT_PORT = parseInt(process.env['MQTT_PORT'] ?? '1883', 10);
 const MQTT_USERNAME = process.env['MQTT_USERNAME'] ?? '';
 const MQTT_PASSWORD = process.env['MQTT_PASSWORD'] ?? '';
 
-const TOPIC = 'plantwise/sensors/+/moisture';
+const TOPIC = 'plantwise/sensors/+/+/moisture';
 
 interface MoisturePayload {
   device_id: unknown;
+  sensor_id: unknown;
   moisture_pct: unknown;
 }
 
@@ -31,13 +32,18 @@ export function handleMessage(topic: string, message: Buffer): void {
     return;
   }
 
-  const deviceId = payload.device_id;
-  const moisturePct = payload.moisture_pct;
+  // Topic format: plantwise/sensors/<device_id>/<sensor_id>/moisture (5 segments)
+  const segments = topic.split('/');
+  const sensorId = segments.length === 5 ? segments[3] : undefined;
 
-  if (typeof deviceId !== 'string' || deviceId.trim() === '') {
-    console.error(`[mqtt] missing device_id on ${topic}: ${raw}`);
+  if (!sensorId) {
+    console.error(
+      `[mqtt] malformed topic (expected plantwise/sensors/<device_id>/<sensor_id>/moisture): ${topic}`
+    );
     return;
   }
+
+  const moisturePct = payload.moisture_pct;
 
   if (
     typeof moisturePct !== 'number' ||
@@ -49,17 +55,18 @@ export function handleMessage(topic: string, message: Buffer): void {
     return;
   }
 
-  const device = getDevice(deviceId);
+  // Plant assignment is keyed by sensor_id (e.g. "monstera", "pothos")
+  const device = getDevice(sensorId);
   if (!device) {
     console.error(
-      `[mqtt] no plant assigned to device "${deviceId}" — run: plantwise device assign ${deviceId} <plant-id>`
+      `[mqtt] no plant assigned to sensor "${sensorId}" — run: plantwise device assign ${sensorId} <plant-id>`
     );
     return;
   }
 
   const plant = getPlant(device.plant_id);
   if (!plant) {
-    console.error(`[mqtt] plant ${device.plant_id} assigned to "${deviceId}" no longer exists`);
+    console.error(`[mqtt] plant ${device.plant_id} assigned to "${sensorId}" no longer exists`);
     return;
   }
 
@@ -69,7 +76,7 @@ export function handleMessage(topic: string, message: Buffer): void {
   const tooDry = moisturePct < plant.moisture_threshold_pct;
   const status = tooWet ? 'too wet' : tooDry ? 'needs water' : 'OK';
   console.log(
-    `[mqtt] ${plant.name} [ID: ${plant.id}] — ${moisturePct}% (low: ${plant.moisture_threshold_pct}% / high: ${plant.moisture_upper_threshold_pct}%) — ${status}`
+    `[mqtt] ${plant.name} [${sensorId}] — ${moisturePct}% (low: ${plant.moisture_threshold_pct}% / high: ${plant.moisture_upper_threshold_pct}%) — ${status}`
   );
 
   if (process.env['MQTT_NOTIFY'] === 'true') {
