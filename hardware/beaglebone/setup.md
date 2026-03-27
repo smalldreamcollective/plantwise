@@ -4,7 +4,7 @@ The sensor publisher is distributed as a pip-installable Python package. No repo
 
 ## Prerequisites
 
-- Debian 12 image on the BBB
+- Debian 12 image on the BBB (booting from eMMC recommended over SD card)
 - Python 3.11+ (ships with Debian 12)
 - NTP configured (see step 4)
 
@@ -23,6 +23,9 @@ Settings → Deploy keys → Add deploy key. Paste the output above. Leave "Allo
 
 **On the BBB** — configure SSH to use this key only for this repo:
 ```bash
+mkdir -p ~/.ssh
+touch ~/.ssh/config
+chmod 600 ~/.ssh/config
 cat >> ~/.ssh/config << 'EOF'
 
 Host github-plantwise
@@ -31,7 +34,6 @@ Host github-plantwise
     IdentityFile ~/.ssh/plantwise_deploy
     IdentitiesOnly yes
 EOF
-chmod 600 ~/.ssh/config
 ```
 
 Test the connection:
@@ -45,17 +47,21 @@ ssh -T git@github-plantwise
 ```bash
 sudo apt-get install -y pipx
 pipx ensurepath
+source ~/.bashrc
 ```
 
 `pipx` installs CLI tools in isolated virtualenvs and exposes them in `~/.local/bin` — no conflicts with system Python.
 
 ## 3. Install the package
 
-```bash
-pipx install "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
-```
+Use a shallow clone to avoid connection timeouts on the BBB's slow connection:
 
-This installs the `plantwise-sensor` command and all dependencies (`smbus2`, `paho-mqtt`, `influxdb-client`) in one step.
+```bash
+git clone --depth 1 git@github-plantwise:smalldreamcollective/plantwise.git /tmp/plantwise
+cd /tmp/plantwise/hardware/beaglebone
+pipx install --force .
+cd ~ && rm -rf /tmp/plantwise
+```
 
 ## 4. Configure environment
 
@@ -69,38 +75,42 @@ DEVICE_ID=living-room          # unique slug for this BBB
 MQTT_HOST=192.168.1.x          # Mac's LAN IP
 INFLUXDB_URL=http://192.168.1.x:8086
 INFLUXDB_TOKEN=plantwise-dev-token
+
+# Sensor channel names (PCA9548A mux)
+CH0_NAME=monstera
+CH1_NAME=basil
+CH2_NAME=aloe-vera
 ```
 
 Full template: [`hardware/beaglebone/.env.example`](.env.example)
 
-Then on your Mac, assign the device to a plant:
+Then on your Mac, assign each sensor to a plant:
 ```bash
-plantwise device assign living-room <plant-id>
+npx tsx src/cli/index.ts device assign monstera <plant-id>
+npx tsx src/cli/index.ts device assign basil <plant-id>
+npx tsx src/cli/index.ts device assign aloe-vera <plant-id>
 ```
 
-Plant assignments live on the server — no `PLANT_ID` is needed on the device itself.
+Plant assignments live on the server — no plant ID is needed on the device itself.
 
 ## 5. Configure NTP
 
-Critical for accurate InfluxDB timestamps.
+Critical for accurate InfluxDB timestamps. Note: Debian 12 uses `ntpsec`, not `ntp`.
 
 ```bash
-sudo apt-get install -y ntp
-sudo systemctl enable ntp && sudo systemctl start ntp
-timedatectl status   # verify sync
+sudo apt-get install -y ntpsec
+sudo systemctl enable ntpsec && sudo systemctl start ntpsec
+timedatectl status   # verify sync (System clock synchronized: yes)
 ```
 
 ## 6. Install the systemd service
 
-```bash
-# Fetch the service file via SSH (no full repo clone needed)
-scp git@github-plantwise:smalldreamcollective/plantwise/hardware/beaglebone/plantwise-sensor.service \
-    /tmp/plantwise-sensor.service 2>/dev/null || \
-curl -s --key ~/.ssh/plantwise_deploy \
-    "https://raw.githubusercontent.com/smalldreamcollective/plantwise/main/hardware/beaglebone/plantwise-sensor.service" \
-    -o /tmp/plantwise-sensor.service
+The service file was already cloned in step 3. Copy it from the clone, or fetch it directly:
 
-sudo cp /tmp/plantwise-sensor.service /etc/systemd/system/
+```bash
+git clone --depth 1 git@github-plantwise:smalldreamcollective/plantwise.git /tmp/plantwise
+sudo cp /tmp/plantwise/hardware/beaglebone/plantwise-sensor.service /etc/systemd/system/
+rm -rf /tmp/plantwise
 sudo systemctl daemon-reload
 sudo systemctl enable plantwise-sensor
 sudo systemctl start plantwise-sensor
@@ -112,11 +122,30 @@ sudo systemctl status plantwise-sensor
 journalctl -u plantwise-sensor -f
 ```
 
-## Deploying updates
+## 7. Set up the plantwise-update script
+
+This script updates the package and restarts the service in one command:
 
 ```bash
-pipx install --force "git+ssh://git@github-plantwise/smalldreamcollective/plantwise.git#subdirectory=hardware/beaglebone"
+mkdir -p ~/bin
+cat > ~/bin/plantwise-update << 'EOF'
+#!/usr/bin/env bash
+set -e
+git clone --depth 1 git@github-plantwise:smalldreamcollective/plantwise.git /tmp/plantwise-update-tmp
+cd /tmp/plantwise-update-tmp/hardware/beaglebone
+pipx install --force .
+cd ~ && rm -rf /tmp/plantwise-update-tmp
 sudo systemctl restart plantwise-sensor
+echo "plantwise-sensor updated and restarted"
+EOF
+chmod +x ~/bin/plantwise-update
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+To deploy updates:
+```bash
+plantwise-update
 ```
 
 ## Troubleshooting
@@ -125,7 +154,9 @@ sudo systemctl restart plantwise-sensor
 |---|---|
 | Service won't start | `journalctl -u plantwise-sensor -n 50` |
 | InfluxDB not reachable | `curl http://<mac-ip>:8086/ping` |
-| I2C device not found | `i2cdetect -y 2` (should show `36` at 0x36) |
-| NTP not syncing | `ntpq -p` |
+| Mux not detected | `sudo i2cdetect -y 2` (should show `70` at 0x70) |
+| Sensor not detected | `sudo i2cdetect -y 2` (should show `36` at 0x36 when channel selected) |
+| NTP not syncing | `timedatectl status` |
 | Check buffer | `sqlite3 ~/.plantwise_buffer.db "SELECT * FROM pending_readings ORDER BY id DESC LIMIT 20;"` |
 | SSH auth failing | `ssh -vT git@github-plantwise` |
+| plantwise-update not found | `source ~/.bashrc` or run `~/bin/plantwise-update` directly |
