@@ -195,13 +195,14 @@ Connects to the Mosquitto broker and listens for soil moisture readings publishe
 docker compose up -d
 ```
 
-Starts four services:
+Starts five services:
 | Service | Port | Purpose |
 |---|---|---|
 | Mosquitto | 1883 | MQTT broker |
 | InfluxDB | 8086 | Time-series database (source of truth) |
 | Grafana | 3001 | Dashboards — open http://localhost:3001 (admin/admin) |
 | Telegraf | — | MQTT → InfluxDB bridge |
+| Node-RED | 1880 | Flow-based automation prototyping — open http://localhost:1880 |
 
 Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with `docker compose down`.
 

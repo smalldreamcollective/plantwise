@@ -38,6 +38,16 @@ services:
       - influxdb
     restart: unless-stopped
 
+  nodered:
+    image: nodered/node-red:latest
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered-data:/data
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
   telegraf:
     image: telegraf:1.30
     environment:
@@ -55,3 +65,4 @@ services:
 volumes:
   influxdb-data:
   grafana-data:
+  nodered-data:
