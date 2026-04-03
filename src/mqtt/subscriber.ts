@@ -10,10 +10,32 @@ const MQTT_PASSWORD = process.env['MQTT_PASSWORD'] ?? '';
 const MOISTURE_TOPIC = 'plantwise/sensors/+/+/moisture';
 const STATUS_TOPIC = 'plantwise/devices/+/status';
 
+// Per-device stale version notification throttle — at most once per hour
+const VERSION_NOTIFY_INTERVAL_MS = 60 * 60 * 1000;
+export const versionNotifyLastSent = new Map<string, number>();
+
+function checkVersion(deviceId: string, reportedVersion: unknown): void {
+  const targetVersion = process.env['TARGET_VERSION'] ?? '';
+  if (!targetVersion || typeof reportedVersion !== 'string') return;
+  if (reportedVersion === targetVersion) return;
+
+  const now = Date.now();
+  const last = versionNotifyLastSent.get(deviceId) ?? 0;
+  if (now - last < VERSION_NOTIFY_INTERVAL_MS) return;
+  versionNotifyLastSent.set(deviceId, now);
+
+  const msg = `PlantWise device [${deviceId}] is running v${reportedVersion} — expected v${targetVersion}\nRun plantwise-update on the device to upgrade.`;
+  console.warn(`[mqtt] ${msg}`);
+  if (process.env['MQTT_NOTIFY'] === 'true') {
+    notify(msg);
+  }
+}
+
 interface MoisturePayload {
   device_id: unknown;
   sensor_id: unknown;
   moisture_pct: unknown;
+  version?: unknown;
 }
 
 function parsePayload(raw: string): MoisturePayload | null {
@@ -72,6 +94,7 @@ export function handleMessage(topic: string, message: Buffer): void {
   }
 
   logSensorReading(device.plant_id, moisturePct, 'hardware');
+  checkVersion(segments[2] ?? 'unknown', payload.version);
 
   const tooWet = moisturePct > plant.moisture_upper_threshold_pct;
   const tooDry = moisturePct < plant.moisture_threshold_pct;

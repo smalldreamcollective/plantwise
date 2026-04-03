@@ -35,6 +35,7 @@ MQTT_PORT=1883
 MQTT_USERNAME=
 MQTT_PASSWORD=
 MQTT_NOTIFY=false
+TARGET_VERSION=   # optional — set to expected BBB package version to enable stale version warnings
 
 # InfluxDB (Phase 4F — auto-initialized by Docker Compose, no manual setup needed)
 INFLUXDB_URL=http://localhost:8086
@@ -252,6 +253,8 @@ npm run serve
 ```
 
 Connects to the Mosquitto broker and listens for soil moisture readings published by hardware sensors. Readings are stored in `sensor_readings` automatically. Set `MQTT_NOTIFY=true` in `.env` to fire a desktop notification when moisture drops below a plant's threshold.
+
+Set `TARGET_VERSION` in `.env` to the expected BBB package version (e.g. `0.1.0`). If a device reports a different version, a warning is logged and a notification fires (if `MQTT_NOTIFY=true`) at most once per hour per device. To update the BBB, SSH in and run `plantwise-update`.
 
 **Start the full local stack (Phase 4F):**
 ```bash

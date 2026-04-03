@@ -33,12 +33,20 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
+from importlib.metadata import version as pkg_version, PackageNotFoundError
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
 import smbus2
 from influxdb_client import InfluxDBClient, Point, WritePrecision  # type: ignore[import]
 from influxdb_client.client.write_api import SYNCHRONOUS  # type: ignore[import]
+
+# ── Version ────────────────────────────────────────────────────────────────────
+
+try:
+    PACKAGE_VERSION = pkg_version("plantwise-sensor")
+except PackageNotFoundError:
+    PACKAGE_VERSION = "unknown"
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -325,7 +333,12 @@ def publish_status(status: str) -> None:
 
 def publish_reading(moisture_pct: int, sensor_id: str) -> None:
     topic = f"plantwise/sensors/{DEVICE_ID}/{sensor_id}/moisture"
-    payload = json.dumps({"device_id": DEVICE_ID, "sensor_id": sensor_id, "moisture_pct": moisture_pct})
+    payload = json.dumps({
+        "device_id": DEVICE_ID,
+        "sensor_id": sensor_id,
+        "moisture_pct": moisture_pct,
+        "version": PACKAGE_VERSION,
+    })
     client = get_mqtt_client()
     client.publish(topic, payload, qos=1)
     log.info("published → %s moisture=%d%%", topic, moisture_pct)
