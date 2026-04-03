@@ -35,6 +35,7 @@ Never read .env files.
 - **Never commit directly to main.** All changes must go through a branch and PR so CI/CD checks and tests can run. No exceptions.
 - Pre-commit hook runs lint-staged automatically — do not skip with `--no-verify`
 - Run `npm test` before opening a PR
+- **Always run `/review-pr <number>` before merging any PR.** No PR merges without a code review. This is non-negotiable — run the review, address any critical or major issues, then merge.
 - **ALWAYS update README.md and the `help-guide` command in `src/cli/index.ts`** whenever commands are added, changed, or removed. This is non-negotiable — the README is the primary user-facing documentation. No CLI change is complete without a README update.
 - **Every feature must have a PRD in `docs/prd/`** — create or update the relevant file before writing code. Naming: `phase-Nx-short-description.md`
 - **Every new feature or query function must include tests.** Add or update the relevant `*.test.ts` file alongside the code change. Coverage targets: 80% lines/functions/statements, 70% branches (enforced by `npm run test:coverage`). Exceptions: `src/agent/` (LangGraph — requires live API) and `src/cli/` (Commander.js wiring — business logic is covered by query tests).
