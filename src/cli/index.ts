@@ -373,8 +373,14 @@ program
 
       const sensorId = sensorAnswer.trim();
       if (sensorId) {
-        assignDevice(sensorId, plant.id);
-        console.log(`Assigned "${sensorId}" → ${plant.name} [ID: ${plant.id}]`);
+        try {
+          assignDevice(sensorId, plant.id);
+          console.log(`Assigned "${sensorId}" → ${plant.name} [ID: ${plant.id}]`);
+        } catch {
+          console.warn(
+            `Warning: could not assign sensor "${sensorId}" — run: plantwise device assign ${sensorId} ${plant.id}`
+          );
+        }
       }
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
