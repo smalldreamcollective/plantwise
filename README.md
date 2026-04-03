@@ -196,6 +196,10 @@ npm run sensor -- status 1
 npm run sensor -- history 1
 npm run sensor -- history 1 --limit 50
 
+# Show reading history for all plants at once
+npm run sensor -- history
+npm run sensor -- history --limit 5
+
 # Show avg, min, and max moisture for all plants side by side
 npm run sensor -- avg
 ```
