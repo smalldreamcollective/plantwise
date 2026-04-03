@@ -59,6 +59,15 @@ function initSchema(db: Database.Database): void {
       name TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS channel_mappings (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id   TEXT NOT NULL,
+      channel     INTEGER NOT NULL,
+      sensor_name TEXT NOT NULL,
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(device_id, channel)
+    );
   `);
 
   // Migrate existing DBs: add watering_interval_days if not already present

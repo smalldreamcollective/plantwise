@@ -218,6 +218,29 @@ npm run device -- list
 # aloe-vera  → Aloe Vera [ID: 1]
 ```
 
+### `channel` — Manage BBB sensor channel mappings *(direct)*
+
+```bash
+npm run channel -- map <device-id> <channel> <sensor-name>   # map a channel to a name
+npm run channel -- unmap <device-id> <channel>               # remove a mapping
+npm run channel -- list [device-id]                          # list all mappings
+```
+
+Maps PCA9548A mux channels to human-readable sensor names from the Mac — no SSH required. The mapping is saved locally and published as a retained MQTT message to the device. The BBB hot-reloads its sensor list immediately when the config arrives.
+
+```bash
+npm run channel -- map living-room 0 monstera
+npm run channel -- map living-room 1 basil
+npm run channel -- map living-room 2 aloe-vera
+npm run channel -- list
+#   living-room
+#     ch0 → monstera
+#     ch1 → basil
+#     ch2 → aloe-vera
+```
+
+Requires the MQTT broker to be reachable. If not, the mapping is saved locally and will be published next time.
+
 ### `serve` — Start the MQTT subscriber *(direct)*
 
 ```bash
