@@ -115,6 +115,7 @@ export function handleStatusMessage(topic: string, message: Buffer): void {
     return;
   }
 
+  // 'warning' is reserved for future use — BBB currently only publishes 'error'
   if (payload.event === 'error' || payload.event === 'warning') {
     const code = typeof payload.code === 'string' ? payload.code : 'unknown';
     const msg = typeof payload.message === 'string' ? payload.message : raw;

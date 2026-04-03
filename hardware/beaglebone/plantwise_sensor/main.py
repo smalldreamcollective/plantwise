@@ -165,6 +165,24 @@ def read_temp_f(bus: smbus2.SMBus) -> float:
     celsius = raw * (1.0 / (1 << 16))
     return (celsius * 9 / 5) + 32
 
+# ── Error reporting ────────────────────────────────────────────────────────────
+
+_ERROR_THROTTLE_S = 300  # max one alert per error code per 5 minutes
+_error_throttle: dict[str, float] = {}
+
+
+def publish_error(code: str, message: str) -> None:
+    """Publish an error event to the status topic (not retained, throttled)."""
+    now = time.monotonic()
+    if now - _error_throttle.get(code, 0) < _ERROR_THROTTLE_S:
+        return
+    _error_throttle[code] = now
+    client = get_mqtt_client()
+    payload = json.dumps({"event": "error", "code": code, "message": str(message)})
+    client.publish(STATUS_TOPIC, payload, qos=1, retain=False)
+    log.info("error event → %s (%s: %s)", STATUS_TOPIC, code, message)
+
+
 # ── Store-and-forward buffer ────────────────────────────────────────────────────
 
 def init_buffer(path: str) -> sqlite3.Connection:
@@ -303,22 +321,6 @@ def publish_status(status: str) -> None:
     payload = json.dumps({"status": status, "device": DEVICE_ID})
     client.publish(STATUS_TOPIC, payload, qos=1, retain=True)
     log.info("status → %s (%s)", STATUS_TOPIC, status)
-
-
-_ERROR_THROTTLE_S = 300  # max one alert per error code per 5 minutes
-_error_throttle: dict[str, float] = {}
-
-
-def publish_error(code: str, message: str) -> None:
-    """Publish an error event to the status topic (not retained, throttled)."""
-    now = time.monotonic()
-    if now - _error_throttle.get(code, 0) < _ERROR_THROTTLE_S:
-        return
-    _error_throttle[code] = now
-    client = get_mqtt_client()
-    payload = json.dumps({"event": "error", "code": code, "message": str(message)})
-    client.publish(STATUS_TOPIC, payload, qos=1, retain=False)
-    log.info("error event → %s (%s: %s)", STATUS_TOPIC, code, message)
 
 
 def publish_reading(moisture_pct: int, sensor_id: str) -> None:

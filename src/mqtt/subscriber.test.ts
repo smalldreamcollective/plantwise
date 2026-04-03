@@ -265,4 +265,11 @@ describe('handleStatusMessage', () => {
     expect(notifyModule.notify).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('handles unknown payload shape without throwing or notifying', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    handleStatusMessage(statusTopic, msg({ foo: 'bar' }));
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
 });
