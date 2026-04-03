@@ -273,6 +273,21 @@ describe('version checking', () => {
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('does not warn again within the throttle window', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const payload = msg({
+      device_id: 'living-room',
+      sensor_id: 'monstera',
+      moisture_pct: 50,
+      version: '0.1.0',
+    });
+    handleMessage(versionTopic, payload);
+    handleMessage(versionTopic, payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
 });
 
 describe('handleStatusMessage', () => {
