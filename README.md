@@ -182,6 +182,24 @@ npm run sensor -- history 1 --limit 50
 npm run sensor -- avg
 ```
 
+### `device` — Manage sensor device → plant assignments *(direct)*
+
+```bash
+npm run device -- assign <sensor-id> <plant-id>   # assign a sensor to a plant
+npm run device -- unassign <sensor-id>             # remove an assignment
+npm run device -- list                             # show all assignments
+```
+
+Links a hardware sensor (identified by its `sensor_id`, e.g. `monstera`, `aloe-vera`) to a plant in your collection. The MQTT subscriber uses this mapping to log incoming readings to the correct plant.
+
+```bash
+npm run device -- assign monstera 4
+npm run device -- list
+# monstera   → Haworthiopsis attenuata (Zebra Plant) [ID: 4]
+# basil      → Basil [ID: 3]
+# aloe-vera  → Aloe Vera [ID: 1]
+```
+
 ### `serve` — Start the MQTT subscriber *(direct)*
 
 ```bash
