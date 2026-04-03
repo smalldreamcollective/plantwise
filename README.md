@@ -146,6 +146,24 @@ npm run identify -- ./photo.jpg
 
 Requires API keys. The photo is resized to 1024px before submission.
 
+After identification, displays care recommendations (watering interval, moisture thresholds) for the top match and prompts you to add the plant to your collection with those values pre-filled. You can also assign a sensor immediately after adding.
+
+```
+Identified: Sedum furfuraceum (93%)
+
+Recommended care:
+  Watering interval : 14 days
+  Moisture low      : 15%
+  Moisture high     : 35%
+  Notes             : Allow soil to dry out completely between waterings.
+
+Add this plant? [Y/n]: y
+Name [Sedum furfuraceum]: My Succulent
+Added "My Succulent" [ID: 5]
+Assign a sensor to this plant? Enter sensor ID or press Enter to skip: aloe-vera
+Assigned "aloe-vera" → My Succulent [ID: 5]
+```
+
 ### `diagnose` — Assess plant health from a photo *(AI)*
 
 ```bash
