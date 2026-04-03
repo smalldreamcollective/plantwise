@@ -226,7 +226,7 @@ npm run channel -- unmap <device-id> <channel>               # remove a mapping
 npm run channel -- list [device-id]                          # list all mappings
 ```
 
-Maps PCA9548A mux channels to human-readable sensor names from the Mac — no SSH required. The mapping is saved locally and published as a retained MQTT message to the device. The BBB hot-reloads its sensor list immediately when the config arrives.
+Maps PCA9548A mux channels to human-readable sensor names from the host — no SSH required. The mapping is saved locally and published as a retained MQTT message to the device. The BBB hot-reloads its sensor list immediately when the config arrives.
 
 ```bash
 npm run channel -- map living-room 0 monstera
