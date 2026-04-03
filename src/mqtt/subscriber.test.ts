@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as queries from '../db/queries';
 import * as notifyModule from '../utils/notify';
-import { handleMessage, handleStatusMessage } from './subscriber';
+import { handleMessage, handleStatusMessage, versionNotifyLastSent } from './subscriber';
 
 vi.mock('../db/queries', () => ({
   getDevice: vi.fn(),
@@ -183,6 +183,110 @@ describe('handleMessage', () => {
       msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 100 })
     );
     expect(queries.logSensorReading).toHaveBeenCalledWith(1, 100, 'hardware');
+  });
+});
+
+describe('version checking', () => {
+  const versionTopic = 'plantwise/sensors/living-room/monstera/moisture';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(queries.getDevice).mockReturnValue(mockDevice);
+    vi.mocked(queries.getPlant).mockReturnValue(mockPlant);
+    vi.mocked(queries.logSensorReading).mockReturnValue({} as never);
+    versionNotifyLastSent.clear();
+    delete process.env['TARGET_VERSION'];
+    delete process.env['MQTT_NOTIFY'];
+  });
+
+  afterEach(() => {
+    delete process.env['TARGET_VERSION'];
+    delete process.env['MQTT_NOTIFY'];
+  });
+
+  it('does nothing when TARGET_VERSION is not set', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50, version: '0.1.0' })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('does nothing when version matches TARGET_VERSION', () => {
+    process.env['TARGET_VERSION'] = '0.1.0';
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50, version: '0.1.0' })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('warns when version does not match TARGET_VERSION', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50, version: '0.1.0' })
+    );
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('0.1.0'));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('0.2.0'));
+    spy.mockRestore();
+  });
+
+  it('notifies when version mismatches and MQTT_NOTIFY=true', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    process.env['MQTT_NOTIFY'] = 'true';
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50, version: '0.1.0' })
+    );
+    expect(notifyModule.notify).toHaveBeenCalledWith(expect.stringContaining('living-room'));
+    expect(notifyModule.notify).toHaveBeenCalledWith(expect.stringContaining('plantwise-update'));
+    vi.restoreAllMocks();
+  });
+
+  it('does not notify on mismatch when MQTT_NOTIFY is not set', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50, version: '0.1.0' })
+    );
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('does nothing when version field is absent from payload', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    handleMessage(
+      versionTopic,
+      msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 50 })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('does not warn again within the throttle window', () => {
+    process.env['TARGET_VERSION'] = '0.2.0';
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const payload = msg({
+      device_id: 'living-room',
+      sensor_id: 'monstera',
+      moisture_pct: 50,
+      version: '0.1.0',
+    });
+    handleMessage(versionTopic, payload);
+    handleMessage(versionTopic, payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
 
