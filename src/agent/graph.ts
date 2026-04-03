@@ -63,6 +63,17 @@ function buildSystemPrompt(
     "For status: summarize the plant's care history and current health."
   );
 
+  if (command === 'identify') {
+    parts.push(
+      '',
+      'After identifying the plant, append a JSON block at the very end of your response with care recommendations for the top match.',
+      'Use this exact format (no extra text after the block):',
+      '```json',
+      '{"name":"<common name>","species":"<scientific name>","watering_interval_days":<number>,"moisture_threshold_pct":<number>,"moisture_upper_threshold_pct":<number>,"notes":"<brief care note>"}',
+      '```'
+    );
+  }
+
   return parts.join('\n');
 }
 
