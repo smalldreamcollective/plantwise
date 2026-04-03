@@ -355,8 +355,6 @@ program
       }
 
       const nameAnswer = await ask(`Name [${care.name}]: `);
-      rl.close();
-
       const name = nameAnswer.trim() || care.name;
       const plant = insertPlant(
         name,
@@ -367,6 +365,17 @@ program
         care.moisture_upper_threshold_pct
       );
       console.log(`Added "${plant.name}" [ID: ${plant.id}]`);
+
+      const sensorAnswer = await ask(
+        'Assign a sensor to this plant? Enter sensor ID or press Enter to skip: '
+      );
+      rl.close();
+
+      const sensorId = sensorAnswer.trim();
+      if (sensorId) {
+        assignDevice(sensorId, plant.id);
+        console.log(`Assigned "${sensorId}" → ${plant.name} [ID: ${plant.id}]`);
+      }
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
