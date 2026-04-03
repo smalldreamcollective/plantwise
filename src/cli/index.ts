@@ -11,6 +11,7 @@ import {
   assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
+  getAllSensorReadings,
   getChannelMappingsForDevice,
   getHealthChecksForPlant,
   getLatestSensorReading,
@@ -652,46 +653,73 @@ sensorCmd
   });
 
 sensorCmd
-  .command('history <id>')
-  .description('Show moisture reading history for a plant')
-  .option('-n, --limit <n>', 'Number of readings to show (default: 20)', '20')
-  .action((id: string, options: { limit: string }) => {
-    const plantId = parseInt(id, 10);
+  .command('history [id]')
+  .description('Show moisture reading history for a plant, or all plants if no ID given')
+  .option('-n, --limit <n>', 'Number of readings to show per plant (default: 20)', '20')
+  .action((id: string | undefined, options: { limit: string }) => {
     const limit = parseInt(options.limit, 10);
-    if (isNaN(plantId)) {
-      console.error('Error: plant ID must be a number');
-      process.exit(1);
-    }
     if (isNaN(limit) || limit < 1) {
       console.error('Error: --limit must be a positive number');
       process.exit(1);
     }
     try {
-      const plant = getPlant(plantId);
-      if (!plant) {
-        console.error(`Error: No plant found with ID ${plantId}`);
-        process.exit(1);
-      }
-      const readings = getSensorReadings(plantId, limit);
-      if (readings.length === 0) {
-        console.log(`${plant.name} [ID: ${plant.id}] — no sensor readings yet`);
-        return;
-      }
-      console.log(
-        `\nMoisture history for ${plant.name} [ID: ${plant.id}] (last ${readings.length}):\n`
-      );
-      for (const r of readings) {
-        const status =
-          r.moisture_pct > plant.moisture_upper_threshold_pct
-            ? 'too wet   '
-            : r.moisture_pct < plant.moisture_threshold_pct
-              ? 'needs water'
-              : 'OK         ';
+      if (id === undefined) {
+        const readings = getAllSensorReadings(limit);
+        if (readings.length === 0) {
+          console.log('No sensor readings recorded yet.');
+          return;
+        }
+        let currentPlantId: number | null = null;
+        for (const r of readings) {
+          if (r.plant_id !== currentPlantId) {
+            currentPlantId = r.plant_id;
+            console.log(
+              `\n${r.plant_name} [ID: ${r.plant_id}] (last ${readings.filter((x) => x.plant_id === r.plant_id).length}):`
+            );
+          }
+          const status =
+            r.moisture_pct > r.moisture_upper_threshold_pct
+              ? 'too wet   '
+              : r.moisture_pct < r.moisture_threshold_pct
+                ? 'needs water'
+                : 'OK         ';
+          console.log(
+            `  ${r.recorded_at}  ${String(r.moisture_pct).padStart(3)}%  ${moistureBar(r.moisture_pct)}  ${status}  [${r.source}]`
+          );
+        }
+        console.log();
+      } else {
+        const plantId = parseInt(id, 10);
+        if (isNaN(plantId)) {
+          console.error('Error: plant ID must be a number');
+          process.exit(1);
+        }
+        const plant = getPlant(plantId);
+        if (!plant) {
+          console.error(`Error: No plant found with ID ${plantId}`);
+          process.exit(1);
+        }
+        const readings = getSensorReadings(plantId, limit);
+        if (readings.length === 0) {
+          console.log(`${plant.name} [ID: ${plant.id}] — no sensor readings yet`);
+          return;
+        }
         console.log(
-          `  ${r.recorded_at}  ${String(r.moisture_pct).padStart(3)}%  ${moistureBar(r.moisture_pct)}  ${status}  [${r.source}]`
+          `\nMoisture history for ${plant.name} [ID: ${plant.id}] (last ${readings.length}):\n`
         );
+        for (const r of readings) {
+          const status =
+            r.moisture_pct > plant.moisture_upper_threshold_pct
+              ? 'too wet   '
+              : r.moisture_pct < plant.moisture_threshold_pct
+                ? 'needs water'
+                : 'OK         ';
+          console.log(
+            `  ${r.recorded_at}  ${String(r.moisture_pct).padStart(3)}%  ${moistureBar(r.moisture_pct)}  ${status}  [${r.source}]`
+          );
+        }
+        console.log();
       }
-      console.log();
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
@@ -992,7 +1020,7 @@ const helpText: Record<string, string> = {
       read <id> <moisture>   Log a moisture reading (0–100) for a plant
       simulate <id>          Generate an emulated dryout curve
       status [id]            Show latest moisture for one or all plants
-      history <id>           Show full reading history for a plant
+      history [id]           Show reading history for a plant, or all plants if no ID given
       avg                    Show avg, min, max moisture for all plants
 
     Options (read):
@@ -1002,7 +1030,7 @@ const helpText: Record<string, string> = {
       --days <n>          Number of days to simulate (default: 7)
 
     Options (history):
-      -n, --limit <n>     Number of readings to show (default: 20)
+      -n, --limit <n>     Number of readings to show per plant (default: 20)
 
     Examples:
       npm run sensor -- read 1 45
@@ -1011,6 +1039,8 @@ const helpText: Record<string, string> = {
       npm run sensor -- simulate 1 --days 14
       npm run sensor -- status
       npm run sensor -- status 1
+      npm run sensor -- history
+      npm run sensor -- history --limit 5
       npm run sensor -- history 1
       npm run sensor -- history 1 --limit 50
       npm run sensor -- avg

@@ -7,6 +7,7 @@ import {
   assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
+  getAllSensorReadings,
   getChannelMappingsForDevice,
   getDevice,
   getHealthChecksForPlant,
@@ -477,6 +478,60 @@ describe('DB queries', () => {
       const plant = insertPlant('Basil');
       for (let i = 0; i < 5; i++) logSensorReading(plant.id, 50);
       expect(getSensorReadings(plant.id, 3)).toHaveLength(3);
+    });
+  });
+
+  describe('getAllSensorReadings', () => {
+    it('returns an empty array when no readings exist', () => {
+      insertPlant('Cactus');
+      expect(getAllSensorReadings()).toEqual([]);
+    });
+
+    it('returns readings for all plants with plant name and thresholds', () => {
+      const plantA = insertPlant('Monstera');
+      const plantB = insertPlant('Aloe');
+      logSensorReading(plantA.id, 60);
+      logSensorReading(plantB.id, 20);
+      const results = getAllSensorReadings();
+      expect(results).toHaveLength(2);
+      const a = results.find((r) => r.plant_id === plantA.id);
+      const b = results.find((r) => r.plant_id === plantB.id);
+      expect(a?.plant_name).toBe('Monstera');
+      expect(a?.moisture_pct).toBe(60);
+      expect(b?.plant_name).toBe('Aloe');
+      expect(b?.moisture_pct).toBe(20);
+    });
+
+    it('respects the limitPerPlant parameter', () => {
+      const plantA = insertPlant('Fern');
+      const plantB = insertPlant('Basil');
+      for (let i = 0; i < 5; i++) logSensorReading(plantA.id, 50);
+      for (let i = 0; i < 5; i++) logSensorReading(plantB.id, 50);
+      const results = getAllSensorReadings(3);
+      expect(results.filter((r) => r.plant_id === plantA.id)).toHaveLength(3);
+      expect(results.filter((r) => r.plant_id === plantB.id)).toHaveLength(3);
+    });
+
+    it('orders readings newest-first within each plant', () => {
+      const plant = insertPlant('Mint');
+      logSensorReading(plant.id, 30);
+      getDb()
+        .prepare(
+          "INSERT INTO sensor_readings (plant_id, moisture_pct, source, recorded_at) VALUES (?, 70, 'manual', datetime('now', '+1 hour'))"
+        )
+        .run(plant.id);
+      const results = getAllSensorReadings();
+      const readings = results.filter((r) => r.plant_id === plant.id);
+      expect(readings[0]?.moisture_pct).toBe(70);
+      expect(readings[1]?.moisture_pct).toBe(30);
+    });
+
+    it('includes moisture threshold fields from the plant', () => {
+      const plant = insertPlant('Succulent', undefined, undefined, undefined, 15, 40);
+      logSensorReading(plant.id, 25);
+      const results = getAllSensorReadings();
+      expect(results[0]?.moisture_threshold_pct).toBe(15);
+      expect(results[0]?.moisture_upper_threshold_pct).toBe(40);
     });
   });
 
