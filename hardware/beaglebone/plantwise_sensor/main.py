@@ -254,6 +254,7 @@ def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
 
     except Exception as e:
         log.warning("InfluxDB flush failed (will retry): %s", e)
+        publish_error("influxdb_flush_failed", str(e))
         return 0
 
 # ── MQTT (persistent connection) ───────────────────────────────────────────────
@@ -302,6 +303,22 @@ def publish_status(status: str) -> None:
     payload = json.dumps({"status": status, "device": DEVICE_ID})
     client.publish(STATUS_TOPIC, payload, qos=1, retain=True)
     log.info("status → %s (%s)", STATUS_TOPIC, status)
+
+
+_ERROR_THROTTLE_S = 300  # max one alert per error code per 5 minutes
+_error_throttle: dict[str, float] = {}
+
+
+def publish_error(code: str, message: str) -> None:
+    """Publish an error event to the status topic (not retained, throttled)."""
+    now = time.monotonic()
+    if now - _error_throttle.get(code, 0) < _ERROR_THROTTLE_S:
+        return
+    _error_throttle[code] = now
+    client = get_mqtt_client()
+    payload = json.dumps({"event": "error", "code": code, "message": str(message)})
+    client.publish(STATUS_TOPIC, payload, qos=1, retain=False)
+    log.info("error event → %s (%s: %s)", STATUS_TOPIC, code, message)
 
 
 def publish_reading(moisture_pct: int, sensor_id: str) -> None:
@@ -368,6 +385,7 @@ def main() -> None:
 
         except Exception as e:
             log.error("sensor read error: %s", e)
+            publish_error("sensor_read_error", str(e))
 
         for _ in range(INTERVAL_S):
             if not _running:

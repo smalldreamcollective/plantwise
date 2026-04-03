@@ -7,7 +7,8 @@ const MQTT_PORT = parseInt(process.env['MQTT_PORT'] ?? '1883', 10);
 const MQTT_USERNAME = process.env['MQTT_USERNAME'] ?? '';
 const MQTT_PASSWORD = process.env['MQTT_PASSWORD'] ?? '';
 
-const TOPIC = 'plantwise/sensors/+/+/moisture';
+const MOISTURE_TOPIC = 'plantwise/sensors/+/+/moisture';
+const STATUS_TOPIC = 'plantwise/devices/+/status';
 
 interface MoisturePayload {
   device_id: unknown;
@@ -88,6 +89,45 @@ export function handleMessage(topic: string, message: Buffer): void {
   }
 }
 
+interface StatusPayload {
+  status?: unknown;
+  event?: unknown;
+  code?: unknown;
+  message?: unknown;
+}
+
+export function handleStatusMessage(topic: string, message: Buffer): void {
+  const raw = message.toString();
+  let payload: StatusPayload;
+  try {
+    payload = JSON.parse(raw) as StatusPayload;
+  } catch {
+    console.error(`[mqtt] invalid JSON on ${topic}: ${raw}`);
+    return;
+  }
+
+  // Extract device_id from: plantwise/devices/<device_id>/status
+  const segments = topic.split('/');
+  const deviceId = segments.length === 4 ? segments[2] : 'unknown';
+
+  if (typeof payload.status === 'string') {
+    console.log(`[mqtt] device ${deviceId} — ${payload.status}`);
+    return;
+  }
+
+  if (payload.event === 'error' || payload.event === 'warning') {
+    const code = typeof payload.code === 'string' ? payload.code : 'unknown';
+    const msg = typeof payload.message === 'string' ? payload.message : raw;
+    console.error(`[mqtt] device alert [${deviceId}] ${code}: ${msg}`);
+    if (process.env['MQTT_NOTIFY'] === 'true') {
+      notify(`PlantWise device alert [${deviceId}]\n${code}: ${msg}`);
+    }
+    return;
+  }
+
+  console.log(`[mqtt] device ${deviceId} status: ${raw}`);
+}
+
 export function startSubscriber(): void {
   const url = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
   const options: mqtt.IClientOptions = {};
@@ -100,17 +140,23 @@ export function startSubscriber(): void {
 
   client.on('connect', () => {
     console.log(`[mqtt] connected to ${url}`);
-    client.subscribe(TOPIC, (err) => {
+    client.subscribe([MOISTURE_TOPIC, STATUS_TOPIC], (err) => {
       if (err) {
         console.error('[mqtt] subscribe error:', err.message);
       } else {
-        console.log(`[mqtt] subscribed to ${TOPIC}`);
+        console.log(`[mqtt] subscribed to ${MOISTURE_TOPIC} and ${STATUS_TOPIC}`);
         console.log('[mqtt] waiting for sensor readings...');
       }
     });
   });
 
-  client.on('message', handleMessage);
+  client.on('message', (topic: string, message: Buffer) => {
+    if (topic.startsWith('plantwise/devices/')) {
+      handleStatusMessage(topic, message);
+    } else {
+      handleMessage(topic, message);
+    }
+  });
 
   client.on('error', (err) => {
     console.error('[mqtt] error:', err.message);
