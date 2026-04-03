@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as queries from '../db/queries';
 import * as notifyModule from '../utils/notify';
-import { handleMessage } from './subscriber';
+import { handleMessage, handleStatusMessage } from './subscriber';
 
 vi.mock('../db/queries', () => ({
   getDevice: vi.fn(),
@@ -183,5 +183,93 @@ describe('handleMessage', () => {
       msg({ device_id: 'living-room', sensor_id: 'monstera', moisture_pct: 100 })
     );
     expect(queries.logSensorReading).toHaveBeenCalledWith(1, 100, 'hardware');
+  });
+});
+
+describe('handleStatusMessage', () => {
+  const statusTopic = 'plantwise/devices/living-room/status';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env['MQTT_NOTIFY'];
+  });
+
+  afterEach(() => {
+    delete process.env['MQTT_NOTIFY'];
+  });
+
+  it('logs online status to console without notifying', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    handleStatusMessage(statusTopic, msg({ status: 'online', device: 'living-room' }));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('living-room'));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('online'));
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('logs offline status to console without notifying', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    handleStatusMessage(statusTopic, msg({ status: 'offline', device: 'living-room' }));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('offline'));
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('logs error event to console regardless of MQTT_NOTIFY', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      statusTopic,
+      msg({ event: 'error', code: 'influxdb_flush_failed', message: 'connection refused' })
+    );
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('influxdb_flush_failed'));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('connection refused'));
+    spy.mockRestore();
+  });
+
+  it('fires notify on error event when MQTT_NOTIFY=true', () => {
+    process.env['MQTT_NOTIFY'] = 'true';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      statusTopic,
+      msg({ event: 'error', code: 'sensor_read_error', message: 'OSError: I2C failure' })
+    );
+    expect(notifyModule.notify).toHaveBeenCalledWith(expect.stringContaining('living-room'));
+    expect(notifyModule.notify).toHaveBeenCalledWith(expect.stringContaining('sensor_read_error'));
+    vi.restoreAllMocks();
+  });
+
+  it('does not fire notify on error event when MQTT_NOTIFY is not set', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      statusTopic,
+      msg({ event: 'error', code: 'influxdb_flush_failed', message: 'timeout' })
+    );
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('extracts device_id correctly from topic', () => {
+    process.env['MQTT_NOTIFY'] = 'true';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      'plantwise/devices/bedroom-sensor/status',
+      msg({ event: 'error', code: 'sensor_read_error', message: 'fail' })
+    );
+    expect(notifyModule.notify).toHaveBeenCalledWith(expect.stringContaining('bedroom-sensor'));
+    vi.restoreAllMocks();
+  });
+
+  it('skips invalid JSON', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(statusTopic, Buffer.from('not json'));
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('handles unknown payload shape without throwing or notifying', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    handleStatusMessage(statusTopic, msg({ foo: 'bar' }));
+    expect(notifyModule.notify).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
