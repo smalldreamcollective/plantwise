@@ -316,7 +316,57 @@ program
 
     try {
       const result = await runAgent('identify', photo, null, userMessage);
-      console.log(result);
+
+      // Extract care recommendations JSON block from response
+      const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```\s*$/);
+      const displayText = jsonMatch ? result.slice(0, jsonMatch.index).trim() : result;
+      console.log(displayText);
+
+      if (!jsonMatch) return;
+
+      let care: {
+        name: string;
+        species: string;
+        watering_interval_days: number;
+        moisture_threshold_pct: number;
+        moisture_upper_threshold_pct: number;
+        notes: string;
+      };
+
+      try {
+        care = JSON.parse(jsonMatch[1]);
+      } catch {
+        return;
+      }
+
+      console.log('\nRecommended care:');
+      console.log(`  Watering interval : ${care.watering_interval_days} days`);
+      console.log(`  Moisture low      : ${care.moisture_threshold_pct}%`);
+      console.log(`  Moisture high     : ${care.moisture_upper_threshold_pct}%`);
+      if (care.notes) console.log(`  Notes             : ${care.notes}`);
+
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const ask = (q: string) => new Promise<string>((res) => rl.question(q, res));
+
+      const addAnswer = await ask('\nAdd this plant? [Y/n]: ');
+      if (addAnswer.trim().toLowerCase() === 'n') {
+        rl.close();
+        return;
+      }
+
+      const nameAnswer = await ask(`Name [${care.name}]: `);
+      rl.close();
+
+      const name = nameAnswer.trim() || care.name;
+      const plant = insertPlant(
+        name,
+        care.species,
+        care.notes || undefined,
+        care.watering_interval_days,
+        care.moisture_threshold_pct,
+        care.moisture_upper_threshold_pct
+      );
+      console.log(`Added "${plant.name}" [ID: ${plant.id}]`);
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);
@@ -797,6 +847,9 @@ const helpText: Record<string, string> = {
   identify <photo>
     Identify a plant from a photo using AI. Requires API keys.
     The photo is resized to 1024px before submission.
+
+    After identification, displays care recommendations and prompts you
+    to add the plant to your collection with pre-filled values.
 
     Examples:
       npm run identify -- ./photo.jpg
