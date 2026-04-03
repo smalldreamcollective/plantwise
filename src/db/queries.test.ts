@@ -7,6 +7,7 @@ import {
   assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
+  getChannelMappingsForDevice,
   getDevice,
   getHealthChecksForPlant,
   getLastCareEvent,
@@ -18,12 +19,15 @@ import {
   getSensorReadings,
   insertHealthCheck,
   insertPlant,
+  listChannelMappings,
   listDevices,
   listPlants,
   logCareEvent,
   logSensorReading,
+  mapChannel,
   removePlant,
   unassignDevice,
+  unmapChannel,
   updatePlant,
 } from './queries';
 
@@ -594,6 +598,61 @@ describe('DB queries', () => {
 
     it('unassignDevice returns false for unknown device', () => {
       expect(unassignDevice('nonexistent')).toBe(false);
+    });
+  });
+
+  describe('channel mappings', () => {
+    beforeEach(() => {
+      getDb().exec('DELETE FROM channel_mappings');
+    });
+
+    it('maps a channel and retrieves it', () => {
+      const m = mapChannel('living-room', 0, 'monstera');
+      expect(m.device_id).toBe('living-room');
+      expect(m.channel).toBe(0);
+      expect(m.sensor_name).toBe('monstera');
+    });
+
+    it('upserts on conflict — same device and channel', () => {
+      mapChannel('living-room', 0, 'monstera');
+      const m = mapChannel('living-room', 0, 'pothos');
+      expect(m.sensor_name).toBe('pothos');
+      expect(listChannelMappings('living-room')).toHaveLength(1);
+    });
+
+    it('lists all mappings for a device ordered by channel', () => {
+      mapChannel('living-room', 2, 'aloe-vera');
+      mapChannel('living-room', 0, 'monstera');
+      mapChannel('living-room', 1, 'basil');
+      const mappings = listChannelMappings('living-room');
+      expect(mappings.map((m) => m.channel)).toEqual([0, 1, 2]);
+    });
+
+    it('lists all mappings across devices when no device_id given', () => {
+      mapChannel('living-room', 0, 'monstera');
+      mapChannel('bedroom', 0, 'cactus');
+      expect(listChannelMappings()).toHaveLength(2);
+    });
+
+    it('unmaps a channel', () => {
+      mapChannel('living-room', 0, 'monstera');
+      expect(unmapChannel('living-room', 0)).toBe(true);
+      expect(listChannelMappings('living-room')).toHaveLength(0);
+    });
+
+    it('unmapChannel returns false for unknown mapping', () => {
+      expect(unmapChannel('living-room', 5)).toBe(false);
+    });
+
+    it('getChannelMappingsForDevice returns a channel→name record', () => {
+      mapChannel('living-room', 0, 'monstera');
+      mapChannel('living-room', 1, 'basil');
+      const record = getChannelMappingsForDevice('living-room');
+      expect(record).toEqual({ '0': 'monstera', '1': 'basil' });
+    });
+
+    it('getChannelMappingsForDevice returns empty object when no mappings', () => {
+      expect(getChannelMappingsForDevice('unknown-device')).toEqual({});
     });
   });
 });

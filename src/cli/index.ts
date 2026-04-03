@@ -5,11 +5,13 @@ import dotenv from 'dotenv';
 import { runAgent } from '../agent/graph';
 import { getDb } from '../db/schema';
 import { notify } from '../utils/notify';
+import mqtt from 'mqtt';
 import { startSubscriber } from '../mqtt/subscriber';
 import {
   assignDevice,
   getAllPlantsWithLatestReading,
   getAllPlantsWithMoistureStats,
+  getChannelMappingsForDevice,
   getHealthChecksForPlant,
   getLatestSensorReading,
   getPlant,
@@ -17,12 +19,15 @@ import {
   getPlantWithWatering,
   getPlantsOverdueForWatering,
   insertPlant,
+  listChannelMappings,
   listDevices,
   listPlants,
   logCareEvent,
   logSensorReading,
+  mapChannel,
   removePlant,
   unassignDevice,
+  unmapChannel,
   updatePlant,
 } from '../db/queries';
 
@@ -790,6 +795,104 @@ deviceCmd
     }
   });
 
+const channelCmd = program
+  .command('channel')
+  .description('Manage BBB sensor channel → name mappings');
+
+function publishChannelConfig(deviceId: string): void {
+  const host = process.env['MQTT_HOST'] ?? 'localhost';
+  const port = parseInt(process.env['MQTT_PORT'] ?? '1883', 10);
+  const mappings = getChannelMappingsForDevice(deviceId);
+  const payload = JSON.stringify({ channels: mappings });
+  const topic = `plantwise/devices/${deviceId}/config`;
+  const client = mqtt.connect(`mqtt://${host}:${port}`);
+  client.on('connect', () => {
+    client.publish(topic, payload, { qos: 1, retain: true }, () => {
+      client.end();
+      console.log(`Config published to ${topic}`);
+    });
+  });
+  client.on('error', () => {
+    client.end();
+    console.warn(
+      'Warning: could not reach MQTT broker — config saved locally but not sent to device.'
+    );
+    console.warn(
+      `Run again when the broker is available, or restart the BBB service to pick up changes.`
+    );
+  });
+}
+
+channelCmd
+  .command('map <device-id> <channel> <sensor-name>')
+  .description('Map a mux channel to a sensor name and publish config to the device')
+  .action((deviceId: string, channelStr: string, sensorName: string) => {
+    const channel = parseInt(channelStr, 10);
+    if (isNaN(channel) || channel < 0 || channel > 7) {
+      console.error('Error: channel must be a number between 0 and 7');
+      process.exit(1);
+    }
+    try {
+      mapChannel(deviceId, channel, sensorName);
+      console.log(`Mapped ${deviceId} channel ${channel} → "${sensorName}"`);
+      publishChannelConfig(deviceId);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+channelCmd
+  .command('unmap <device-id> <channel>')
+  .description('Remove a channel mapping and publish updated config to the device')
+  .action((deviceId: string, channelStr: string) => {
+    const channel = parseInt(channelStr, 10);
+    if (isNaN(channel) || channel < 0 || channel > 7) {
+      console.error('Error: channel must be a number between 0 and 7');
+      process.exit(1);
+    }
+    try {
+      const removed = unmapChannel(deviceId, channel);
+      if (!removed) {
+        console.error(`Error: No mapping found for ${deviceId} channel ${channel}`);
+        process.exit(1);
+      }
+      console.log(`Removed mapping for ${deviceId} channel ${channel}`);
+      publishChannelConfig(deviceId);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+channelCmd
+  .command('list [device-id]')
+  .description('List all channel mappings, optionally filtered by device')
+  .action((deviceId?: string) => {
+    try {
+      const mappings = listChannelMappings(deviceId);
+      if (mappings.length === 0) {
+        console.log(
+          'No channel mappings yet. Run: plantwise channel map <device-id> <channel> <name>'
+        );
+        return;
+      }
+      console.log('\nChannel mappings:\n');
+      let lastDevice = '';
+      for (const m of mappings) {
+        if (m.device_id !== lastDevice) {
+          console.log(`  ${m.device_id}`);
+          lastDevice = m.device_id;
+        }
+        console.log(`    ch${m.channel} → ${m.sensor_name}`);
+      }
+      console.log();
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 const helpText: Record<string, string> = {
   add: `
   add <name> [options]
@@ -950,6 +1053,24 @@ const helpText: Record<string, string> = {
       npm run device -- unassign living-room
       npm run device -- list
 `,
+  channel: `
+  channel <subcommand>
+    Manage BBB sensor channel → name mappings from the Mac.
+    Mappings are saved locally and published to the device via MQTT (retained).
+    The BBB hot-reloads immediately — no restart or SSH required.
+
+    Subcommands:
+      map <device-id> <channel> <sensor-name>   Map a mux channel to a sensor name
+      unmap <device-id> <channel>               Remove a channel mapping
+      list [device-id]                          Show all mappings
+
+    Examples:
+      npm run channel -- map living-room 0 monstera
+      npm run channel -- map living-room 1 basil
+      npm run channel -- unmap living-room 2
+      npm run channel -- list
+      npm run channel -- list living-room
+`,
   serve: `
   serve
     Start the MQTT subscriber. Connects to the Mosquitto broker and listens for
@@ -1006,6 +1127,7 @@ COMMANDS
   log       Log a care event (water / feed / repot)
   sensor    Manage soil moisture sensor readings
   device    Manage sensor device → plant assignments
+  channel   Manage BBB sensor channel mappings from the Mac
   serve     Start the MQTT subscriber (listen for hardware sensor readings)
   remind    List plants overdue for watering
   remove    Remove a plant from your collection
@@ -1021,6 +1143,7 @@ Run "npm run help -- <command>" for usage examples.
   npm run help -- log
   npm run help -- sensor
   npm run help -- device
+  npm run help -- channel
   npm run help -- serve
   npm run help -- remind
   npm run help -- remove

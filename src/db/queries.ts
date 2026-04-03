@@ -343,6 +343,54 @@ export function listDevices(): (Device & { plant_name: string })[] {
     .all() as (Device & { plant_name: string })[];
 }
 
+// ── Channel mappings ──────────────────────────────────────────────────────────
+
+export interface ChannelMapping {
+  id: number;
+  device_id: string;
+  channel: number;
+  sensor_name: string;
+  updated_at: string;
+}
+
+export function mapChannel(deviceId: string, channel: number, sensorName: string): ChannelMapping {
+  const db = getDb();
+  return db
+    .prepare(
+      `INSERT INTO channel_mappings (device_id, channel, sensor_name)
+       VALUES (?, ?, ?)
+       ON CONFLICT(device_id, channel) DO UPDATE SET sensor_name = excluded.sensor_name, updated_at = datetime('now')
+       RETURNING *`
+    )
+    .get(deviceId, channel, sensorName) as ChannelMapping;
+}
+
+export function unmapChannel(deviceId: string, channel: number): boolean {
+  const db = getDb();
+  return (
+    db
+      .prepare('DELETE FROM channel_mappings WHERE device_id = ? AND channel = ?')
+      .run(deviceId, channel).changes > 0
+  );
+}
+
+export function listChannelMappings(deviceId?: string): ChannelMapping[] {
+  const db = getDb();
+  if (deviceId) {
+    return db
+      .prepare('SELECT * FROM channel_mappings WHERE device_id = ? ORDER BY channel ASC')
+      .all(deviceId) as ChannelMapping[];
+  }
+  return db
+    .prepare('SELECT * FROM channel_mappings ORDER BY device_id ASC, channel ASC')
+    .all() as ChannelMapping[];
+}
+
+export function getChannelMappingsForDevice(deviceId: string): Record<string, string> {
+  const mappings = listChannelMappings(deviceId);
+  return Object.fromEntries(mappings.map((m) => [String(m.channel), m.sensor_name]));
+}
+
 export function getAllPlantsWithLatestReading(): (Plant & {
   moisture_pct: number | null;
   recorded_at: string | null;
