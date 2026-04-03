@@ -7,7 +7,7 @@
 A native desktop application for PlantWise. Two tracks under consideration:
 
 ### Track A — Electron App
-- Native desktop app (Mac first)
+- Native desktop app (cross-platform; Mac/Linux/Windows)
 - Reads from local SQLite DB and InfluxDB
 - No API layer needed — direct DB access
 - Full UI: current moisture, historical charts, plant health, care log, watering triggers
@@ -22,7 +22,7 @@ A native desktop application for PlantWise. Two tracks under consideration:
 - Does this replace Grafana or complement it?
 - Read-only or interactive (trigger watering, log care events)?
 - Electron vs TUI vs both?
-- Mac-only or cross-platform?
+- Desktop-only or also web-based?
 - Where does this fit relative to Phase 4F cloud observability (#25)?
 
 ## Related

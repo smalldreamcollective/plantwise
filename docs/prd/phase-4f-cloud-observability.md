@@ -8,19 +8,19 @@ Active
 The current sensor data pipeline has a fundamental reliability gap:
 
 ```
-BBB (cron) → MQTT publish (QoS 0) → Mosquitto broker → Mac subscriber → SQLite
+BBB (cron) → MQTT publish (QoS 0) → Mosquitto broker → host subscriber → SQLite
 ```
 
-Every hop is fire-and-forget. If the Mac is offline, the broker restarts, or the network blips, readings are silently dropped. The BBB's local log and the Mac's SQLite DB can diverge with no way to reconcile them. There is also no visibility into device health without SSH access.
+Every hop is fire-and-forget. If the host is offline, the broker restarts, or the network blips, readings are silently dropped. The BBB's local log and the host's SQLite DB can diverge with no way to reconcile them. There is also no visibility into device health without SSH access.
 
-As more hardware devices are added (Pi Zero, ESP32) this problem compounds — each device has its own local log, and the only aggregated view is what happened to reach the Mac.
+As more hardware devices are added (Pi Zero, ESP32) this problem compounds — each device has its own local log, and the only aggregated view is what happened to reach the host.
 
 ## Goals
 
 - Sensor readings are durable regardless of transient network or process failures
 - All hardware devices share a single source of truth for time-series sensor data
 - Device health (last seen, publish rate, errors) is visible in a dashboard
-- Moisture threshold alerts are observable, not dependent on `MQTT_NOTIFY` on the Mac
+- Moisture threshold alerts are observable, not dependent on `MQTT_NOTIFY` on the host
 - SQLite and the CLI continue to work for local queries
 - Foundation is in place for Phase 5 pump actuation and future multi-device support
 - Local dev environment mirrors production — no cloud account required to develop
@@ -56,15 +56,15 @@ Everything is driven by `.env` — no code changes needed to migrate to cloud.
 ```
 BBB sensor read
   → write to BBB-local SQLite buffer (store-and-forward, durable across restarts)
-  → flush buffer to InfluxDB (http://<mac-lan-ip>:8086, with retry + replay on reconnect)
+  → flush buffer to InfluxDB (http://<host-ip>:8086, with retry + replay on reconnect)
   → publish to MQTT (QoS 1) → Mosquitto
       → Telegraf (mqtt_consumer plugin) → InfluxDB [redundant path]
-      → npm run serve → SQLite on Mac [local CLI cache]
+      → npm run serve → SQLite on host [local CLI cache]
 
 Grafana → queries InfluxDB → dashboards + alerts
 ```
 
-**InfluxDB is the source of truth. SQLite on the Mac is a derived local cache.**
+**InfluxDB is the source of truth. SQLite on the host is a derived local cache.**
 
 ### Docker Compose services (added to existing stack)
 
@@ -82,7 +82,7 @@ telegraf      telegraf — MQTT subscriber → InfluxDB writer
 - Publish a `plantwise/devices/<device-id>/status` MQTT message on startup (`online`) and shutdown (`offline`)
 - NTP must be configured on the BBB (critical for accurate time-series timestamps)
 
-### Mac-side changes
+### Host-side changes
 
 - `docker-compose.yml` expanded with InfluxDB, Grafana, Telegraf services
 - Telegraf config subscribes to `plantwise/sensors/+/moisture` and writes to InfluxDB
@@ -97,7 +97,7 @@ telegraf      telegraf — MQTT subscriber → InfluxDB writer
 |---|---|---|---|
 | BBB → InfluxDB | Network unreachable | Write fails | Store-and-forward buffer; replays on reconnect |
 | BBB process restart | Crash during publish | In-flight reading lost | Buffer written before network calls |
-| Mosquitto | Docker/Mac restart | MQTT path down | Telegraf reconnects automatically; InfluxDB direct path unaffected |
+| Mosquitto | Docker/host restart | MQTT path down | Telegraf reconnects automatically; InfluxDB direct path unaffected |
 | InfluxDB | Docker restart | Writes fail temporarily | Persistent Docker volume; buffer replays on recovery |
 | Grafana | Docker restart | Dashboards unavailable | Persistent Docker volume; data safe in InfluxDB |
 | BBB clock drift | NTP not configured | Timestamps wrong | Configure NTP on BBB (part of this phase) |
@@ -165,7 +165,7 @@ INFLUXDB_TOKEN=plantwise-dev-token
 
 - [ ] `docker compose up` starts Mosquitto, InfluxDB, Grafana, and Telegraf
 - [ ] Moisture readings from the BBB appear in InfluxDB within 60 seconds of publish
-- [ ] Readings are not lost when the Mac-side subscriber (`npm run serve`) is stopped
+- [ ] Readings are not lost when the host-side subscriber (`npm run serve`) is stopped
 - [ ] Readings buffered on the BBB during an InfluxDB outage are replayed on reconnect
 - [ ] Grafana dashboard shows moisture history per plant and per device
 - [ ] Grafana alert fires when moisture drops below a plant's threshold

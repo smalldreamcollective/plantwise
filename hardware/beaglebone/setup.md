@@ -72,7 +72,7 @@ nano ~/.plantwise.env
 Minimum required values:
 ```
 DEVICE_ID=living-room          # unique slug for this BBB
-MQTT_HOST=192.168.1.x          # Mac's LAN IP
+MQTT_HOST=192.168.1.x          # host's LAN IP
 INFLUXDB_URL=http://192.168.1.x:8086
 INFLUXDB_TOKEN=plantwise-dev-token
 
@@ -84,7 +84,7 @@ CH2_NAME=aloe-vera
 
 Full template: [`hardware/beaglebone/.env.example`](.env.example)
 
-Then on your Mac, assign each sensor to a plant:
+Then on the host, assign each sensor to a plant:
 ```bash
 npx tsx src/cli/index.ts device assign monstera <plant-id>
 npx tsx src/cli/index.ts device assign basil <plant-id>
