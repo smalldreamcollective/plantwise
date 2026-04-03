@@ -265,7 +265,7 @@ Starts five services:
 
 Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with `docker compose down`.
 
-**Observability:** InfluxDB is the source of truth for all sensor data. SQLite on the Mac is a derived local cache used by CLI commands. Grafana is pre-provisioned with a PlantWise dashboard showing moisture history, current moisture gauges, and device last-seen status.
+**Observability:** InfluxDB is the source of truth for all sensor data. SQLite on the host is a derived local cache used by CLI commands. Grafana is pre-provisioned with a PlantWise dashboard showing moisture history, current moisture gauges, and device last-seen status.
 
 **Hardware setup:** See [`hardware/beaglebone/setup.md`](hardware/beaglebone/setup.md) for the full BBB setup guide. The publisher runs as a systemd service with a store-and-forward SQLite buffer — readings buffered during an InfluxDB outage are replayed automatically on reconnect.
 

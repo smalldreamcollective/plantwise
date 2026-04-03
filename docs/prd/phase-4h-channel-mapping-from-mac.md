@@ -1,23 +1,23 @@
-# Phase 4H — Channel Mapping from Mac via MQTT
+# Phase 4H — Channel Mapping from Host via MQTT
 
 ## Problem
 BBB channel-to-sensor-name mappings (`CH0_NAME`, `CH1_NAME`, etc.) are set in `.plantwise.env` on the BBB. Reassigning a sensor to a different plant (e.g. moving a sensor from one pot to another) requires SSHing into the BBB and editing a file. This is admin-level friction for a day-to-day operation.
 
 ## Solution
-Manage channel mappings from the Mac CLI. The Mac publishes the mapping as a retained MQTT message to `plantwise/devices/<device-id>/config`. The BBB subscribes to this topic, stores the config locally, and hot-reloads its sensor list — no restart or SSH required.
+Manage channel mappings from the CLI. The host publishes the mapping as a retained MQTT message to `plantwise/devices/<device-id>/config`. The BBB subscribes to this topic, stores the config locally, and hot-reloads its sensor list — no restart or SSH required.
 
 ## MQTT Config Topic
 
 **Topic:** `plantwise/devices/<device-id>/config`
 **QoS:** 1
-**Retain:** true (BBB receives latest config on reconnect, even if Mac is offline)
+**Retain:** true (BBB receives latest config on reconnect, even if host is offline)
 
 **Payload:**
 ```json
 {"channels": {"0": "monstera", "1": "basil", "2": "aloe-vera"}}
 ```
 
-## Mac Side Changes
+## Host Side Changes
 
 ### New SQLite table: `channel_mappings`
 ```sql
