@@ -669,12 +669,15 @@ sensorCmd
           console.log('No sensor readings recorded yet.');
           return;
         }
+        const countByPlant = new Map<number, number>();
+        for (const r of readings)
+          countByPlant.set(r.plant_id, (countByPlant.get(r.plant_id) ?? 0) + 1);
         let currentPlantId: number | null = null;
         for (const r of readings) {
           if (r.plant_id !== currentPlantId) {
             currentPlantId = r.plant_id;
             console.log(
-              `\n${r.plant_name} [ID: ${r.plant_id}] (last ${readings.filter((x) => x.plant_id === r.plant_id).length}):`
+              `\n${r.plant_name} [ID: ${r.plant_id}] (last ${countByPlant.get(r.plant_id)}):`
             );
           }
           const status =
