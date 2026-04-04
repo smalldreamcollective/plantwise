@@ -32,7 +32,7 @@ Never read .env files.
 - Branch naming follows `feat/42-short-description` — the issue number is part of the branch name.
 - A `commit-msg` hook automatically appends `Closes #<n>` to every commit based on the branch name, so issues close when the PR merges.
 - Use Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`
-- **Never commit directly to main.** All changes must go through a branch and PR so CI/CD checks and tests can run. No exceptions.
+- **Never commit directly to main.** All changes must go through a branch and PR so CI/CD checks and tests can run. The one accepted exception: infra/config hotfixes (e.g. Telegraf, Grafana, Docker Compose) during active debugging where the fix is self-contained and carries no application logic. These must remain the exception — document them as such when they happen.
 - Pre-commit hook runs lint-staged automatically — do not skip with `--no-verify`
 - Run `npm test` before opening a PR
 - **Always run `/review-pr <number>` before merging any PR.** No PR merges without a code review. This is non-negotiable — run the review, address any critical or major issues, then merge.
