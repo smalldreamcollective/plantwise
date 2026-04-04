@@ -103,7 +103,25 @@ sudo systemctl enable ntpsec && sudo systemctl start ntpsec
 timedatectl status   # verify sync (System clock synchronized: yes)
 ```
 
-## 6. Install the systemd service
+## 6. Cap journal log size
+
+By default journald retains logs until the disk fills. On an embedded device, cap it early:
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo tee /etc/systemd/journald.conf.d/plantwise.conf << 'EOF'
+[Journal]
+SystemMaxUse=50M
+EOF
+sudo systemctl restart systemd-journald
+```
+
+Verify:
+```bash
+journalctl --disk-usage
+```
+
+## 7. Install the systemd service
 
 The service file was already cloned in step 3. Copy it from the clone, or fetch it directly:
 
@@ -122,7 +140,7 @@ sudo systemctl status plantwise-sensor
 journalctl -u plantwise-sensor -f
 ```
 
-## 7. Set up the plantwise-update script
+## 8. Set up the plantwise-update script
 
 This script updates the package and restarts the service in one command:
 
