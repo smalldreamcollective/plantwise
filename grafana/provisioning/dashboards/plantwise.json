@@ -197,9 +197,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "last"
+            "lastNotNull"
           ],
-          "fields": "/^_value$/",
+          "fields": "",
           "values": false
         },
         "textMode": "auto"
@@ -210,7 +210,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"moisture\")\n  |> filter(fn: (r) => r._field == \"moisture_pct\")\n  |> group(columns: [\"device_id\"])\n  |> last()\n  |> map(fn: (r) => ({_value: int(v: r._time) / 1000000, device_id: r.device_id}))",
+          "query": "from(bucket: \"sensors\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"moisture\")\n  |> filter(fn: (r) => r._field == \"moisture_pct\")\n  |> group(columns: [\"device_id\"])\n  |> last()\n  |> map(fn: (r) => ({_value: int(v: r._time) / 1000000, _time: r._time, device_id: r.device_id, _field: \"last_seen\", _measurement: \"moisture\"}))",
           "refId": "A"
         }
       ],
