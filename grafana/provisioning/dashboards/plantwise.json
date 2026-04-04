@@ -210,7 +210,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket: \"sensors\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"moisture\")\n  |> filter(fn: (r) => r._field == \"moisture_pct\")\n  |> group(columns: [\"device_id\"])\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._time}))\n  |> keep(columns: [\"device_id\", \"_value\"])",
+          "query": "from(bucket: \"sensors\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"moisture\")\n  |> filter(fn: (r) => r._field == \"moisture_pct\")\n  |> group(columns: [\"device_id\"])\n  |> last()\n  |> map(fn: (r) => ({_value: int(v: r._time) / 1000000, device_id: r.device_id}))",
           "refId": "A"
         }
       ],
