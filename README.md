@@ -10,40 +10,29 @@ AI-powered houseplant care assistant. Identify plants, diagnose health issues, a
 
 ## Quick start
 
-Already installed and configured? One command starts everything:
+### iTerm2 dashboard (recommended)
 
+Opens a native 4-pane iTerm2 tab with each pane running the right command.
+
+**One-time setup:**
+1. In iTerm2: **Settings → General → Magic → Enable Python API**
+2. `pip install iterm2`
+
+**Launch:**
 ```bash
-bash scripts/dashboard.sh
-# or
-npm run dashboard
+python3 scripts/dashboard.py
 ```
 
-This will:
-1. Start all Docker services (Mosquitto, InfluxDB, Grafana, Telegraf, Node-RED)
-2. Wait for InfluxDB to be healthy
-3. Open Grafana (`localhost:3001`) and Node-RED (`localhost:1880`) in your browser
-4. Open a tmux session with four panes:
-
 ```
-┌──────────────────────────────┬─────────────────┐
-│  MQTT subscriber             │  sensor status  │
-│  (npm run serve)             │  (auto-refresh) │
-├──────────────────────────────┼─────────────────┤
-│  docker compose logs         │  shell          │
-│  (telegraf + mosquitto)      │                 │
-└──────────────────────────────┴─────────────────┘
+┌──────────────────────┬──────────────────────┐
+│  npm run sensor      │  npm run serve       │
+│    -- history        │  (MQTT subscriber)   │
+├──────────────────────┼──────────────────────┤
+│  shell               │  docker compose up   │
+└──────────────────────┴──────────────────────┘
 ```
-
-Run `bash scripts/dashboard.sh --reset` to kill the session and start fresh.
-
-**iTerm2 native panes:** after the dashboard starts, open a new iTerm2 tab and run:
-```bash
-tmux -CC attach -t plantwise
-```
-This renders each tmux pane as a native iTerm2 pane you can resize and interact with normally.
 
 > **First time?** Complete the Installation steps below before running this.
-> **No tmux?** Install with `brew install tmux`.
 
 ---
 

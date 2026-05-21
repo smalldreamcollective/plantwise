@@ -2,13 +2,18 @@
 """
 PlantWise iTerm2 dashboard
 
-Creates a new tab with 4 panes, all starting in the project root.
+Opens a new tab with 4 panes:
+  top-left     npm run sensor -- history
+  top-right    npm run serve  (MQTT subscriber)
+  bottom-left  shell (project root)
+  bottom-right docker compose up
+
+One-time setup:
+  iTerm2 → Settings → General → Magic → Enable Python API
+  pip install iterm2
 
 Usage:
-    python3 scripts/dashboard.py
-
-Requires:
-    pip install iterm2
+  python3 scripts/dashboard.py
 """
 
 import os
