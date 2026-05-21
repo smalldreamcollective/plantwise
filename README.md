@@ -8,6 +8,40 @@ AI-powered houseplant care assistant. Identify plants, diagnose health issues, a
 - An [Anthropic API key](https://console.anthropic.com) *(required for `identify` and `diagnose` only)*
 - A [Plant.id API key](https://web.plant.id) *(required for `identify` and `diagnose` only)*
 
+## Quick start
+
+### iTerm2 dashboard (recommended)
+
+Opens a native 4-pane iTerm2 tab with each pane running the right command.
+
+**One-time setup:**
+1. In iTerm2: **Settings → General → Magic → Enable Python API**
+2. `pip install iterm2`
+
+**Launch:**
+```bash
+python3 scripts/dashboard.py
+```
+
+```
+┌──────────────────────┬──────────────────────┐
+│  npm run sensor      │  npm run serve       │
+│    -- history        │  (MQTT subscriber)   │
+├──────────────────────┼──────────────────────┤
+│  shell               │  docker compose up   │
+└──────────────────────┴──────────────────────┘
+```
+
+> **First time?** Complete the Installation steps below before running this.
+
+**No iTerm2?** Use the tmux fallback:
+```bash
+bash scripts/dashboard.sh        # start or attach
+bash scripts/dashboard.sh --reset  # kill and restart
+```
+
+---
+
 ## Installation
 
 ```bash
