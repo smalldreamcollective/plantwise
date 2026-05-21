@@ -32,6 +32,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prepare": "husky",
+    "start:local": "bash scripts/start.sh",
+    "dashboard": "bash scripts/dashboard.sh",
     "start-work": "bash scripts/start-work.sh",
     "issue": "gh issue list",
     "issue:new": "gh issue create",

@@ -8,6 +8,45 @@ AI-powered houseplant care assistant. Identify plants, diagnose health issues, a
 - An [Anthropic API key](https://console.anthropic.com) *(required for `identify` and `diagnose` only)*
 - A [Plant.id API key](https://web.plant.id) *(required for `identify` and `diagnose` only)*
 
+## Quick start
+
+Already installed and configured? One command starts everything:
+
+```bash
+bash scripts/dashboard.sh
+# or
+npm run dashboard
+```
+
+This will:
+1. Start all Docker services (Mosquitto, InfluxDB, Grafana, Telegraf, Node-RED)
+2. Wait for InfluxDB to be healthy
+3. Open Grafana (`localhost:3001`) and Node-RED (`localhost:1880`) in your browser
+4. Open a tmux session with four panes:
+
+```
+┌──────────────────────────────┬─────────────────┐
+│  MQTT subscriber             │  sensor status  │
+│  (npm run serve)             │  (auto-refresh) │
+├──────────────────────────────┼─────────────────┤
+│  docker compose logs         │  shell          │
+│  (telegraf + mosquitto)      │                 │
+└──────────────────────────────┴─────────────────┘
+```
+
+Run `bash scripts/dashboard.sh --reset` to kill the session and start fresh.
+
+**iTerm2 native panes:** after the dashboard starts, open a new iTerm2 tab and run:
+```bash
+tmux -CC attach -t plantwise
+```
+This renders each tmux pane as a native iTerm2 pane you can resize and interact with normally.
+
+> **First time?** Complete the Installation steps below before running this.
+> **No tmux?** Install with `brew install tmux`.
+
+---
+
 ## Installation
 
 ```bash
