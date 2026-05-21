@@ -38,7 +38,7 @@ fi
 
 # ── docker services ──────────────────────────────────────────────────────────
 log "Starting Docker services..."
-docker compose up -d
+docker compose up -d --quiet-pull
 echo ""
 
 # Wait until InfluxDB is accepting connections (up to 30 s)

@@ -34,6 +34,12 @@ python3 scripts/dashboard.py
 
 > **First time?** Complete the Installation steps below before running this.
 
+**No iTerm2?** Use the tmux fallback:
+```bash
+bash scripts/dashboard.sh        # start or attach
+bash scripts/dashboard.sh --reset  # kill and restart
+```
+
 ---
 
 ## Installation

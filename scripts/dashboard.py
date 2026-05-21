@@ -55,7 +55,7 @@ async def main(connection):
     }
 
     for pane, cmd in commands.items():
-        await pane.async_send_text(f"cd {ROOT}\n")
+        await pane.async_send_text(f"cd '{ROOT}'\n")
         if cmd:
             await pane.async_send_text(cmd)
 
