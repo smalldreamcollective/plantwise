@@ -308,7 +308,7 @@ Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with
 
 **Observability:** InfluxDB is the source of truth for all sensor data. SQLite on the host is a derived local cache used by CLI commands. Grafana is pre-provisioned with a PlantWise dashboard showing moisture history, current moisture gauges, and device last-seen status.
 
-**Hardware setup:** See [`hardware/beaglebone/setup.md`](hardware/beaglebone/setup.md) for the full BBB setup guide. The publisher runs as a systemd service with a store-and-forward SQLite buffer — readings buffered during an InfluxDB outage are replayed automatically on reconnect.
+**Hardware setup:** See [`hardware/beaglebone/setup.md`](hardware/beaglebone/setup.md) for the full BBB setup guide. The publisher runs as a systemd service with a store-and-forward SQLite buffer — readings buffered during an InfluxDB outage are replayed automatically on reconnect. For SSH access and IP discovery, see [BeagleBone Black](#beaglebone-black) below.
 
 **Cloud migration:** When ready to move off local Docker, update three env vars in `.env` — no code changes required. See `docs/prd/phase-4f-cloud-observability.md` for the migration path.
 
@@ -333,9 +333,11 @@ nmap -sn 192.168.1.0/24 | grep -A1 -i beagle
 ```
 
 **Via USB cable (fallback — fixed IP, no network needed):**
+
+The BBB exposes itself at `192.168.7.2` over USB — SSH in directly, then run `hostname -I` to find its network IP:
 ```bash
 ssh debian@192.168.7.2
-# once logged in, run: hostname -I
+hostname -I
 ```
 
 **From your router:** log into your router's admin UI and look at the DHCP client list — the BBB shows up as `beaglebone` or `arm`.
