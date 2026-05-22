@@ -312,6 +312,57 @@ Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with
 
 **Cloud migration:** When ready to move off local Docker, update three env vars in `.env` — no code changes required. See `docs/prd/phase-4f-cloud-observability.md` for the migration path.
 
+## BeagleBone Black
+
+### Find the BBB's IP address
+
+**mDNS (easiest — try this first):**
+```bash
+ping beaglebone.local
+```
+
+**ARP scan (if mDNS doesn't respond):**
+```bash
+arp -a | grep -i beagle
+```
+
+**nmap scan (if the above returns nothing):**
+```bash
+nmap -sn 192.168.1.0/24 | grep -A1 -i beagle
+# adjust the subnet to match your network (e.g. 192.168.0.0/24)
+```
+
+**Via USB cable (fallback — fixed IP, no network needed):**
+```bash
+ssh debian@192.168.7.2
+# once logged in, run: hostname -I
+```
+
+**From your router:** log into your router's admin UI and look at the DHCP client list — the BBB shows up as `beaglebone` or `arm`.
+
+### Log in via SSH
+
+```bash
+ssh debian@beaglebone.local
+# or use the IP discovered above
+ssh debian@<ip-address>
+```
+
+Default credentials: user `debian`, password `temppwd`. Change this on first login:
+```bash
+passwd
+```
+
+Once in, useful commands:
+```bash
+hostname -I                              # confirm IP address
+sudo systemctl status plantwise-sensor  # check publisher service
+journalctl -u plantwise-sensor -f       # tail live logs
+plantwise-update                        # update the publisher package
+```
+
+---
+
 ## Development
 
 ```bash
