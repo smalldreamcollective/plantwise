@@ -312,6 +312,35 @@ Data is persisted in Docker volumes (`influxdb-data`, `grafana-data`). Stop with
 
 **Cloud migration:** When ready to move off local Docker, update three env vars in `.env` — no code changes required. See `docs/prd/phase-4f-cloud-observability.md` for the migration path.
 
+## Troubleshooting
+
+### InfluxDB field type conflict
+
+**When:** You see a `[mqtt] device alert` or Telegraf log entry like:
+```
+field type conflict: input field "moisture_pct" on measurement "moisture" is type integer, already exists as type float dropped=N
+```
+
+**Why:** InfluxDB enforces a strict per-field type schema — once a field is written as `integer`, all subsequent writes must also be `integer`, and vice versa. If the BBB publisher or Telegraf ever wrote a field with the wrong type (e.g. after a code change), the schema gets locked in and future writes with the correct type are silently dropped.
+
+**Where to look:**
+- Mac terminal running `npm run serve` — surfaces as a `[mqtt] device alert [<device-id>] influxdb_flush_failed` message
+- Telegraf: `docker compose logs telegraf`
+- BBB journal: `journalctl -u plantwise-sensor -f`
+
+**How to fix:** Delete the affected measurement so InfluxDB re-establishes the schema on the next write. Run from the project root:
+```bash
+docker compose exec influxdb influx delete \
+  --bucket sensors \
+  --org plantwise \
+  --start 1970-01-01T00:00:00Z \
+  --stop $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --predicate '_measurement="moisture"' \
+  --token plantwise-dev-token
+```
+
+Replace `moisture` in `--predicate` with the affected measurement name. This deletes all historical data for that measurement, so confirm the conflict is real before running. After deletion, restart Telegraf (`docker compose restart telegraf`) and redeploy the BBB publisher if needed — the schema will be recreated correctly on the next write.
+
 ## BeagleBone Black
 
 ### Find the BBB's IP address
