@@ -16,3 +16,9 @@ coverage/
 :memory:
 :memory:-shm
 :memory:-wal
+
+# Claude Code / FleetView internals
+.agents/
+.claude/
+skills-lock.json
+.DS_Store
