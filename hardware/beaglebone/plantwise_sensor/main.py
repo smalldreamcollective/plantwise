@@ -265,7 +265,7 @@ def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
                 Point("moisture")
                 .tag("device_id", device_id)
                 .tag("sensor_id", sensor_id)
-                .field("moisture_pct", moisture_pct)
+                .field("moisture_pct", float(moisture_pct))
                 .time(recorded_at, WritePrecision.S)
             )
             points.append(point)
