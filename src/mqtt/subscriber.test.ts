@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as queries from '../db/queries';
 import * as notifyModule from '../utils/notify';
-import { handleMessage, handleStatusMessage, versionNotifyLastSent } from './subscriber';
+import {
+  handleMessage,
+  handleStatusMessage,
+  versionNotifyLastSent,
+  buildFlushFailedFixHint,
+} from './subscriber';
 
 vi.mock('../db/queries', () => ({
   getDevice: vi.fn(),
@@ -352,6 +357,33 @@ describe('handleStatusMessage', () => {
     vi.restoreAllMocks();
   });
 
+  it('prints the reset-measurement fix command on a field type conflict', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      statusTopic,
+      msg({
+        event: 'error',
+        code: 'influxdb_flush_failed',
+        message:
+          'failure writing points to database: partial write: field type conflict: input field "moisture_pct" on measurement "moisture" is type float, already exists as type integer dropped=1401',
+      })
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('npm run influx:reset-measurement -- moisture')
+    );
+    spy.mockRestore();
+  });
+
+  it('does not print a fix hint for non-conflict influxdb_flush_failed alerts', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleStatusMessage(
+      statusTopic,
+      msg({ event: 'error', code: 'influxdb_flush_failed', message: 'connection refused' })
+    );
+    expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('influx:reset-measurement'));
+    spy.mockRestore();
+  });
+
   it('extracts device_id correctly from topic', () => {
     process.env['MQTT_NOTIFY'] = 'true';
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -375,5 +407,30 @@ describe('handleStatusMessage', () => {
     handleStatusMessage(statusTopic, msg({ foo: 'bar' }));
     expect(notifyModule.notify).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe('buildFlushFailedFixHint', () => {
+  it('extracts the measurement name from a field type conflict message', () => {
+    const hint = buildFlushFailedFixHint(
+      'influxdb_flush_failed',
+      'field type conflict: input field "moisture_pct" on measurement "moisture" is type float, already exists as type integer dropped=1401'
+    );
+    expect(hint).toBe('  Fix: npm run influx:reset-measurement -- moisture');
+  });
+
+  it('falls back to a placeholder when the measurement cannot be parsed', () => {
+    const hint = buildFlushFailedFixHint('influxdb_flush_failed', 'field type conflict: weird');
+    expect(hint).toBe('  Fix: npm run influx:reset-measurement -- <measurement>');
+  });
+
+  it('returns null for non-conflict influxdb_flush_failed messages', () => {
+    expect(buildFlushFailedFixHint('influxdb_flush_failed', 'connection refused')).toBeNull();
+  });
+
+  it('returns null for other error codes', () => {
+    expect(
+      buildFlushFailedFixHint('sensor_read_error', 'field type conflict: unrelated')
+    ).toBeNull();
   });
 });
