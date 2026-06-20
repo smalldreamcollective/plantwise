@@ -33,6 +33,7 @@
     "test:coverage": "vitest run --coverage",
     "prepare": "husky",
     "start:local": "bash scripts/start.sh",
+    "influx:reset-measurement": "bash scripts/reset-influx-measurement.sh",
     "dashboard": "python3 scripts/dashboard.py",
     "dashboard:tmux": "bash scripts/dashboard.sh",
     "start-work": "bash scripts/start-work.sh",

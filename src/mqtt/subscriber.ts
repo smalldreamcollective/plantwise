@@ -119,6 +119,19 @@ interface StatusPayload {
   message?: unknown;
 }
 
+// InfluxDB locks a field's type on first write; a later write with a different
+// type comes back as a 422 "field type conflict" and is silently dropped.
+// Pull the affected measurement out of the error text so we can tell the
+// operator exactly which command resolves it.
+export function buildFlushFailedFixHint(code: string, message: string): string | null {
+  if (code !== 'influxdb_flush_failed' || !message.includes('field type conflict')) {
+    return null;
+  }
+  const measurementMatch = message.match(/on measurement "([^"]+)"/);
+  const measurement = measurementMatch ? measurementMatch[1] : '<measurement>';
+  return `  Fix: npm run influx:reset-measurement -- ${measurement}`;
+}
+
 export function handleStatusMessage(topic: string, message: Buffer): void {
   const raw = message.toString();
   let payload: StatusPayload;
@@ -143,6 +156,12 @@ export function handleStatusMessage(topic: string, message: Buffer): void {
     const code = typeof payload.code === 'string' ? payload.code : 'unknown';
     const msg = typeof payload.message === 'string' ? payload.message : raw;
     console.error(`[mqtt] device alert [${deviceId}] ${code}: ${msg}`);
+
+    const fixHint = buildFlushFailedFixHint(code, msg);
+    if (fixHint) {
+      console.error(fixHint);
+    }
+
     if (process.env['MQTT_NOTIFY'] === 'true') {
       notify(`PlantWise device alert [${deviceId}]\n${code}: ${msg}`);
     }
