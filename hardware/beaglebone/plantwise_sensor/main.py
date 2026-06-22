@@ -28,6 +28,7 @@ systemd service: hardware/beaglebone/plantwise-sensor.service
 import json
 import logging
 import os
+import re
 import signal
 import sqlite3
 import threading
@@ -51,6 +52,11 @@ except PackageNotFoundError:
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 DEVICE_ID   = os.environ.get("DEVICE_ID", "living-room")
+if not re.fullmatch(r"[A-Za-z0-9_-]+", DEVICE_ID):
+    raise ValueError(
+        f"Invalid DEVICE_ID {DEVICE_ID!r} — must contain only letters, digits, "
+        "hyphens, and underscores (it is interpolated into SQL DDL statements)"
+    )
 INTERVAL_S  = int(os.environ.get("SENSOR_INTERVAL_S", "900"))
 
 BROKER_HOST    = os.environ.get("MQTT_HOST", "192.168.1.x")
@@ -273,8 +279,9 @@ def flush_buffer_to_influx(conn: sqlite3.Connection) -> int:
         write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=points)
         influx.close()
 
-        ids = [str(r[0]) for r in rows]
-        conn.execute(f"UPDATE pending_readings SET published = 1 WHERE id IN ({','.join(ids)})")
+        ids = [r[0] for r in rows]
+        placeholders = ",".join("?" for _ in ids)
+        conn.execute(f"UPDATE pending_readings SET published = 1 WHERE id IN ({placeholders})", ids)
         conn.commit()
         return len(rows)
 
