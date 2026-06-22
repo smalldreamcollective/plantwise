@@ -1,45 +1,56 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as child_process from 'child_process';
 
-// Mock execSync before importing notify
-vi.mock('child_process', () => ({ execSync: vi.fn() }));
+// Mock execFileSync before importing notify
+vi.mock('child_process', () => ({ execFileSync: vi.fn() }));
 
 import { notify } from './notify';
 
 describe('notify', () => {
-  const execSyncMock = vi.mocked(child_process.execSync);
+  const execFileSyncMock = vi.mocked(child_process.execFileSync);
 
   beforeEach(() => {
-    execSyncMock.mockReset();
+    execFileSyncMock.mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('calls osascript with the message body and title', () => {
+  it('calls osascript via execFileSync with the message body and title', () => {
     notify('Basil needs water — never watered');
-    expect(execSyncMock).toHaveBeenCalledOnce();
-    const cmd = execSyncMock.mock.calls[0]?.[0] as string;
-    expect(cmd).toContain('display notification');
-    expect(cmd).toContain('Basil needs water — never watered');
-    expect(cmd).toContain('PlantWise');
+    expect(execFileSyncMock).toHaveBeenCalledOnce();
+    const [cmd, args] = execFileSyncMock.mock.calls[0] as [string, string[]];
+    expect(cmd).toBe('osascript');
+    expect(args).toEqual(['-e', expect.stringContaining('display notification')]);
+    expect(args[1]).toContain('Basil needs water — never watered');
+    expect(args[1]).toContain('PlantWise');
   });
 
   it('escapes double quotes in the body', () => {
     notify('Say "hello"');
-    const cmd = execSyncMock.mock.calls[0]?.[0] as string;
-    expect(cmd).toContain('\\"hello\\"');
+    const args = execFileSyncMock.mock.calls[0]?.[1] as string[];
+    expect(args[1]).toContain('\\"hello\\"');
   });
 
   it('escapes backslashes in the body', () => {
     notify('path\\to\\file');
-    const cmd = execSyncMock.mock.calls[0]?.[0] as string;
-    expect(cmd).toContain('path\\\\to\\\\file');
+    const args = execFileSyncMock.mock.calls[0]?.[1] as string[];
+    expect(args[1]).toContain('path\\\\to\\\\file');
   });
 
-  it('does not throw when execSync fails', () => {
-    execSyncMock.mockImplementation(() => {
+  it('passes single quotes through as a literal argv element with no shell involved', () => {
+    notify("'; touch /tmp/pwned; echo '");
+    expect(execFileSyncMock).toHaveBeenCalledOnce();
+    const [cmd, args] = execFileSyncMock.mock.calls[0] as [string, string[]];
+    // execFileSync never invokes a shell, so the malicious payload is just
+    // inert text inside the single -e argv element — no injection possible.
+    expect(cmd).toBe('osascript');
+    expect(args[1]).toContain("'; touch /tmp/pwned; echo '");
+  });
+
+  it('does not throw when execFileSync fails', () => {
+    execFileSyncMock.mockImplementation(() => {
       throw new Error('osascript not found');
     });
     expect(() => notify('test')).not.toThrow();
